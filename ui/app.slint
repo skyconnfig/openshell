@@ -16,6 +16,7 @@ import { Welcome, SessionInfo } from "welcome.slint";
 import { SessionDialog, SessionDraft } from "session_dialog.slint";
 import { TerminalView, TermSpan, TermMatch } from "terminal_view.slint";
 import { SftpEntry, SftpTreeNode } from "sftp_panel.slint";
+import { RdpView } from "rdp_view.slint";
 
 export { SessionInfo, SessionDraft, TabInfo, SftpEntry, SftpTreeNode }
 
@@ -50,6 +51,12 @@ export struct TerminalState {
     sftp-status: string,
     sftp-loading: bool,
     sftp-tree-nodes: [SftpTreeNode],
+
+    // RDP framebuffer (valid when kind == "rdp")
+    frame: image,
+    frame-width: int,
+    frame-height: int,
+    connected: bool,
 }
 
 export component AppWindow inherits Window {
@@ -172,6 +179,9 @@ export component AppWindow inherits Window {
     callback term-select-end(string /* tab-id */);
     callback term-select-autoscroll(string /* tab-id */, int /* dir */);
 
+    // --- RDP callbacks ---
+    callback send-rdp-mouse(string, int, int, int, int);
+
     HorizontalLayout {
         spacing: 0;
 
@@ -233,9 +243,9 @@ export component AppWindow inherits Window {
                 // allow nesting `if` directly inside a `for`, so we toggle
                 // visibility instead and rely on the layout to overlap them.
                 for term[i] in root.terminals : TerminalView {
-                    visible: term.id == root.active-tab-id;
-                    width: term.id == root.active-tab-id ? parent.width : 0px;
-                    height: term.id == root.active-tab-id ? parent.height : 0px;
+                    visible: term.id == root.active-tab-id && term.frame-width == 0;
+                    width: term.id == root.active-tab-id && term.frame-width == 0 ? parent.width : 0px;
+                    height: term.id == root.active-tab-id && term.frame-width == 0 ? parent.height : 0px;
                     tab-id: term.id;
                     status-line: term.status;
                     spans: term.spans;
@@ -270,6 +280,19 @@ export component AppWindow inherits Window {
                     select-update(r, c) => { root.term-select-update(term.id, r, c); }
                     select-end() => { root.term-select-end(term.id); }
                     select-autoscroll(dir) => { root.term-select-autoscroll(term.id, dir); }
+                }
+                for rdpi in root.terminals : RdpView {
+                    visible: rdpi.id == root.active-tab-id && rdpi.frame-width > 0;
+                    width: rdpi.id == root.active-tab-id && rdpi.frame-width > 0 ? parent.width : 0px;
+                    height: rdpi.id == root.active-tab-id && rdpi.frame-height > 0 ? parent.height : 0px;
+                    tab-id: rdpi.id;
+                    frame: rdpi.frame;
+                    frame-width: rdpi.frame-width;
+                    frame-height: rdpi.frame-height;
+                    status-line: rdpi.status;
+                    connected: rdpi.connected;
+                    send-key(id, key, ctrl, alt, shift) => { root.send-key(id, key, ctrl, alt, shift); }
+                    send-mouse(id, event_type, x, y, buttons) => { root.send-rdp-mouse(id, event_type, x, y, buttons); }
                 }
             }
         }

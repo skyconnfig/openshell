@@ -4,7 +4,7 @@ import { IconButton } from "widgets.slint";
 export struct TabInfo {
     id: string,
     title: string,
-    kind: string,   // "welcome" | "terminal"
+    kind: string,   // "welcome" | "terminal" | "rdp" | "rdp"
     connected: bool,
 }
 
@@ -16,9 +16,9 @@ component SingleTab inherits Rectangle {
     callback closed();
 
     height: 30px;
-    min-width: 100px;          // 缩短：原 120px，短名称（如 "pve"）时更紧凑
-    max-width: 160px;          // 新增：防止长名称把 tab 撑得过宽
-    horizontal-stretch: 0;    // 新增：不参与 TabBar 的等分拉伸，保持自然宽度
+    min-width: 100px;          // 缂╃煭锛氬師 120px锛岀煭鍚嶇О锛堝 "pve"锛夋椂鏇寸揣鍑?
+    max-width: 160px;          // 鏂板锛氶槻姝㈤暱鍚嶇О鎶?tab 鎾戝緱杩囧
+    horizontal-stretch: 0;    // 鏂板锛氫笉鍙備笌 TabBar 鐨勭瓑鍒嗘媺浼革紝淇濇寔鑷劧瀹藉害
     border-radius: Theme.radius-sm;
     background: active ? Theme.bg-panel
         : (touch.has-hover ? Theme.bg-hover : transparent);
@@ -43,6 +43,7 @@ component SingleTab inherits Rectangle {
             y: (parent.height - self.height) / 2;
             border-radius: 4px;
             background: info.kind == "welcome" ? Theme.text-muted
+                : info.kind == "rdp" ? Theme.accent
                 : (info.connected ? Theme.success : Theme.warning);
         }
 
@@ -57,7 +58,7 @@ component SingleTab inherits Rectangle {
 
         // Only show close button for non-welcome tabs
         if info.kind != "welcome" : IconButton {
-            glyph: "×";
+            glyph: "脳";
             size: 20px;
             y: (parent.height - self.height) / 2;
             clicked => { root.closed(); }

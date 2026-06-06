@@ -54,16 +54,18 @@ enum CsiState {
 type TermBuffers = Arc<Mutex<HashMap<String, TermBuffer>>>;
 
 use anyhow::{Context, Result};
-use i_slint_backend_winit::WinitWindowAccessor;
+use i_slint_backend_winit::{WinitWindowAccessor, WinitWindowEventResult};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use tokio::runtime::Runtime;
 
 use crate::config::{AuthMethod, ConfigStore, Secret, Session};
 use crate::i18n::t;
+use crate::rdp::{self, RdpEvent, RdpFrame};
 use crate::sftp::{spawn_sftp, SftpHandle};
 use crate::ssh::{
     format_mtime, format_size, spawn_session, SessionCommand, SessionEvent, SessionHandle,
 };
+use crate::rdp_ffi::{self, RdpInput};
 use crate::system::{format_bytes_per_sec, SystemSampler, SystemSnapshot};
 
 type SftpHandles = Arc<Mutex<HashMap<String, SftpHandle>>>;
@@ -131,11 +133,20 @@ pub fn run() -> Result<()> {
     // Default: 80 cols × 24 rows (SSH spec minimum).
     let last_term_size: Arc<Mutex<(u32, u32)>> = Arc::new(Mutex::new((80, 24)));
 
+    // RDP handles — parallel to SSH handles but for RDP sessions.
+    let rdp_handles: Rc<RefCell<HashMap<String, rdp::RdpHandle>>> =
+        Rc::new(RefCell::new(HashMap::new()));
+    let rdp_events: Rc<RefCell<HashMap<String, tokio::sync::mpsc::UnboundedReceiver<RdpEvent>>>> =
+        Rc::new(RefCell::new(HashMap::new()));
+    let rdp_frames: Rc<RefCell<HashMap<String, RdpFrame>>> =
+        Rc::new(RefCell::new(HashMap::new()));
+
     // --- Build window + models ------------------------------------------
     // Set the Wayland app_id / X11 WM_CLASS *before* the window is created so
     // the Linux desktop shell can match the running window to the installed
     // `meatshell.desktop` entry and show our icon in the dock/taskbar.  (On
     // Windows the icon comes from the embedded .ico, so this is a no-op there.)
+    #[cfg(target_os = "linux")]
     let _ = slint::set_xdg_app_id("meatshell");
     let window = AppWindow::new().context("failed to build Slint window")?;
 
@@ -177,6 +188,8 @@ pub fn run() -> Result<()> {
         tabs_model.clone(),
         terminals_model.clone(),
         handles.clone(),
+        rdp_handles.clone(),
+        rdp_events.clone(),
         bufs.clone(),
         runtime.clone(),
         last_term_size.clone(),
@@ -327,12 +340,34 @@ pub fn run() -> Result<()> {
         tabs_model.clone(),
         terminals_model.clone(),
         handles.clone(),
+        rdp_handles.clone(),
         bufs.clone(),
         sftp_handles.clone(),
         sftp_manual_nav.clone(),
     );
     wire_sftp_callbacks(&window, sftp_handles.clone(), sftp_manual_nav.clone());
-    wire_key_input(&window, handles.clone(), bufs.clone(), last_term_size.clone());
+    // RDP mouse event callback
+    {
+        let handles = rdp_handles.clone();
+        window.on_send_rdp_mouse(move |tab_id: SharedString, event_type: i32, x: i32, y: i32, _buttons: i32| {
+            let tid = tab_id.to_string();
+            let h = handles.borrow();
+            let Some(handle) = h.get(&tid) else { return };
+            let (fw, fh) = (1280u16, 720u16);
+            let mx = (x.max(0) as u16).min(fw - 1);
+            let my = (y.max(0) as u16).min(fh - 1);
+            match event_type {
+                0 => handle.send_input(RdpInput::Mouse { flags: crate::rdp_ffi::ptr_flags::MOVE, x: mx, y: my }),
+                1 => handle.send_input(RdpInput::Mouse { flags: crate::rdp_ffi::ptr_flags::DOWN | crate::rdp_ffi::ptr_flags::BUTTON1, x: mx, y: my }),
+                2 => handle.send_input(RdpInput::Mouse { flags: crate::rdp_ffi::ptr_flags::BUTTON1, x: mx, y: my }),
+                3 => handle.send_input(RdpInput::Mouse { flags: crate::rdp_ffi::ptr_flags::SCROLL_UP, x: mx, y: my }),
+                4 => handle.send_input(RdpInput::Mouse { flags: crate::rdp_ffi::ptr_flags::SCROLL_DOWN, x: mx, y: my }),
+                _ => {}
+            }
+        });
+    }
+
+    wire_key_input(&window, handles.clone(), rdp_handles.clone(), bufs.clone(), last_term_size.clone());
 
     // --- System sampler (1 Hz) ------------------------------------------
     let sampler = Rc::new(Mutex::new(SystemSampler::new()));
@@ -372,11 +407,87 @@ pub fn run() -> Result<()> {
     // that here.
     Box::leak(Box::new(timer));
 
+    // --- RDP frame push timer (~66 ms = ~15 FPS) -------------------------
+    let rdp_weak = window.as_weak();
+    let rdp_t_events = rdp_events.clone();
+    let _rdp_t_terminals = terminals_model.clone();
+    let rdp_t_frames = rdp_frames.clone();
+    let _rdp_t_handles = rdp_handles.clone();
+    let rdp_timer = slint::Timer::default();
+    rdp_timer.start(
+        slint::TimerMode::Repeated,
+        std::time::Duration::from_millis(66),
+        move || {
+            // Drain RDP events from all active sessions.
+            let mut frames_to_push: Vec<(String, RdpFrame, String)> = Vec::new();
+            let mut rxs = rdp_t_events.borrow_mut();
+            for (tab_id, rx) in rxs.iter_mut() {
+                loop {
+                    match rx.try_recv() {
+                        Ok(RdpEvent::Frame(frame)) => {
+                            rdp_t_frames.borrow_mut().insert(tab_id.clone(), frame.clone());
+                            frames_to_push.push((tab_id.clone(), frame, String::new()));
+                        }
+                        Ok(RdpEvent::Connected) => {
+                            frames_to_push.push((tab_id.clone(), RdpFrame::default(), "Connected".into()));
+                        }
+                        Ok(RdpEvent::Closed(reason)) => {
+                            frames_to_push.push((tab_id.clone(), RdpFrame::default(), reason));
+                        }
+                        Ok(RdpEvent::Status(msg)) => {
+                            frames_to_push.push((tab_id.clone(), RdpFrame::default(), msg));
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+            drop(rxs);
+
+            // Push frame changes to Slint
+            if let Some(w) = rdp_weak.upgrade() {
+                let terms = w.get_terminals();
+                if let Some(m) = terms.as_any().downcast_ref::<VecModel<TerminalState>>() {
+                    for (tab_id, frame, status) in &frames_to_push {
+                        for i in 0..m.row_count() {
+                            if let Some(mut row) = m.row_data(i) {
+                                if row.id.as_str() == tab_id {
+                                    if !status.is_empty() {
+                                        row.status = status.clone().into();
+                                    }
+                                    if frame.width > 0 && !frame.data.is_empty() {
+                                        let mut pixel_buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(
+                                            frame.width,
+                                            frame.height,
+                                        );
+                                        let mut pinned = std::pin::Pin::new(&mut pixel_buf);
+                                        let dst = pinned.make_mut_bytes();
+                                        dst.copy_from_slice(&frame.data);
+                                        row.frame = slint::Image::from_rgba8(pixel_buf);
+                                        row.frame_width = frame.width as i32;
+                                        row.frame_height = frame.height as i32;
+                                        row.connected = true;
+                                    }
+                                    if status == "Connected" {
+                                        row.connected = true;
+                                    } else if status.contains("Closed") || status.contains("disconnect") || status.contains("Disconnected") {
+                                        row.connected = false;
+                                    }
+                                    m.set_row_data(i, row);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    );
+    Box::leak(Box::new(rdp_timer));
+
     // OS file drag-and-drop → upload to the active session's SFTP directory,
     // but only when the file is dropped over the file-list area.
     {
         use i_slint_backend_winit::winit::event::WindowEvent as WEvent;
-        use i_slint_backend_winit::EventResult;
+
         let weak = window.as_weak();
         let sh = sftp_handles.clone();
         window.window().on_winit_window_event(move |_w, event| {
@@ -385,7 +496,8 @@ pub fn run() -> Result<()> {
                     handle_file_drop(&win, &sh, path.to_string_lossy().to_string());
                 }
             }
-            EventResult::Propagate
+            WinitWindowEventResult::Propagate
+
         });
     }
 
@@ -530,12 +642,14 @@ fn handle_file_drop(_win: &AppWindow, _sftp_handles: &SftpHandles, _path: String
 // ---------------------------------------------------------------------------
 
 fn sync_sessions_to_model(store: &ConfigStore, model: &VecModel<SessionInfo>) {
-    let rows: Vec<SessionInfo> = store
-        .sessions()
-        .iter()
-        .map(|s| SessionInfo {
+    let mut rows: Vec<SessionInfo> = Vec::new();
+
+    // SSH sessions
+    for s in store.sessions() {
+        rows.push(SessionInfo {
             id: s.id.clone().into(),
             name: s.name.clone().into(),
+            kind: "ssh".into(),
             host: s.host.clone().into(),
             port: s.port as i32,
             user: s.user.clone().into(),
@@ -545,8 +659,27 @@ fn sync_sessions_to_model(store: &ConfigStore, model: &VecModel<SessionInfo>) {
                 .clone()
                 .unwrap_or_else(|| "never".to_string())
                 .into(),
-        })
-        .collect();
+        });
+    }
+
+    // RDP sessions
+    for s in store.rdp_sessions() {
+        rows.push(SessionInfo {
+            id: s.id.clone().into(),
+            name: s.name.clone().into(),
+            kind: "rdp".into(),
+            host: s.host.clone().into(),
+            port: s.port as i32,
+            user: s.username.clone().into(),
+            auth: s.auth.as_str().into(),
+            last_used: s
+                .last_used
+                .clone()
+                .unwrap_or_else(|| "never".to_string())
+                .into(),
+        });
+    }
+
     model.set_vec(rows);
 }
 
@@ -561,6 +694,8 @@ fn wire_session_callbacks(
     tabs_model: Rc<VecModel<TabInfo>>,
     terminals_model: Rc<VecModel<TerminalState>>,
     handles: Rc<RefCell<HashMap<String, SessionHandle>>>,
+    rdp_handles: Rc<RefCell<HashMap<String, rdp::RdpHandle>>>,
+    rdp_events: Rc<RefCell<HashMap<String, tokio::sync::mpsc::UnboundedReceiver<RdpEvent>>>>,
     bufs: TermBuffers,
     runtime: Arc<Runtime>,
     last_term_size: Arc<Mutex<(u32, u32)>>,
@@ -721,6 +856,8 @@ fn wire_session_callbacks(
         let tabs_model = tabs_model.clone();
         let terminals_model = terminals_model.clone();
         let handles = handles.clone();
+        let rdp_handles = rdp_handles.clone();
+        let rdp_events = rdp_events.clone();
         let bufs = bufs.clone();
         let runtime = runtime.clone();
         let last_term_size = last_term_size.clone();
@@ -730,8 +867,51 @@ fn wire_session_callbacks(
         let local_snap = local_snap.clone();
         let local_net_hist = local_net_hist.clone();
         window.on_connect_session(move |id: SharedString| {
-            let id = id.to_string();
-            let session = match store.borrow().get(&id).cloned() {
+            let id_str = id.to_string();
+            // --- RDP session branch ---
+            if let Some(rdp_session) = store.borrow().rdp_get(&id_str).cloned() {
+                let tab_id = uuid::Uuid::new_v4().to_string();
+                let title: SharedString = rdp_session.name.clone().into();
+                tabs_model.push(TabInfo {
+                    id: tab_id.clone().into(),
+                    title: title,
+                    kind: "rdp".into(),
+                    connected: true,
+                });
+                terminals_model.push(TerminalState {
+                    id: tab_id.clone().into(),
+                    status: "Connecting...".into(),
+                    spans: ModelRc::from(std::rc::Rc::new(VecModel::<TermSpan>::default())),
+                    cursor_row: 0,
+                    cursor_col: 0,
+                    rows_used: 0,
+                    is_alt_screen: false,
+                    find_matches: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
+                    selection: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
+                    sftp_path: "".into(),
+                    sftp_entries: ModelRc::from(std::rc::Rc::new(VecModel::<SftpEntry>::default())),
+                    sftp_status: "".into(),
+                    sftp_loading: false,
+                    sftp_tree_nodes: ModelRc::from(std::rc::Rc::new(VecModel::<SftpTreeNode>::default())),
+                    frame: slint::Image::default(),
+                    frame_width: 0,
+                    frame_height: 0,
+                    connected: false,
+                });
+                let (handle, rx) = rdp::spawn_rdp(
+                    runtime.handle(),
+                    tab_id.clone(),
+                    rdp_session,
+                );
+                rdp_handles.borrow_mut().insert(tab_id.clone(), handle);
+                rdp_events.borrow_mut().insert(tab_id.clone(), rx);
+                if let Some(w) = weak.upgrade() {
+                    w.set_active_tab_id(tab_id.into());
+                }
+                return;
+            }
+            // --- SSH session branch (existing) ---
+            let session = match store.borrow().get(&id_str).cloned() {
                 Some(s) => s,
                 None => return,
             };
@@ -776,6 +956,10 @@ fn wire_session_callbacks(
                 sftp_tree_nodes: ModelRc::from(
                     std::rc::Rc::new(VecModel::<SftpTreeNode>::default()),
                 ),
+                frame: slint::Image::default(),
+                frame_width: 0,
+                frame_height: 0,
+                connected: false,
             });
             // Create vt100 parser for this tab (default 24×80; resized on first
             // terminal-resize callback). 5000-line scrollback is stored for
@@ -1484,6 +1668,7 @@ fn wire_tab_callbacks(
     tabs_model: Rc<VecModel<TabInfo>>,
     terminals_model: Rc<VecModel<TerminalState>>,
     handles: Rc<RefCell<HashMap<String, SessionHandle>>>,
+    rdp_handles: Rc<RefCell<HashMap<String, rdp::RdpHandle>>>,
     bufs: TermBuffers,
     sftp_handles: SftpHandles,
     sftp_manual_nav: SftpManualNav,
@@ -1501,6 +1686,7 @@ fn wire_tab_callbacks(
         let tabs_model = tabs_model.clone();
         let terminals_model = terminals_model.clone();
         let handles = handles.clone();
+        let rdp_handles = rdp_handles.clone();
         let bufs = bufs.clone();
         let sftp_handles = sftp_handles.clone();
         let sftp_manual_nav = sftp_manual_nav.clone();
@@ -1511,6 +1697,9 @@ fn wire_tab_callbacks(
             }
             if let Some(handle) = handles.borrow_mut().remove(&id) {
                 handle.close();
+            }
+            if let Some(rdp_handle) = rdp_handles.borrow_mut().remove(&id) {
+                rdp_handle.close();
             }
             if let Some(sftp) = sftp_handles.lock().unwrap().remove(&id) {
                 sftp.close();
@@ -1742,6 +1931,7 @@ fn wire_sftp_callbacks(
 fn wire_key_input(
     window: &AppWindow,
     handles: Rc<RefCell<HashMap<String, SessionHandle>>>,
+    rdp_handles: Rc<RefCell<HashMap<String, rdp::RdpHandle>>>,
     bufs: TermBuffers,
     last_term_size: Arc<Mutex<(u32, u32)>>,
 ) {
@@ -1749,12 +1939,25 @@ fn wire_key_input(
     // readline handles echo, history (↑↓), Tab completion, Ctrl+C, etc.
     {
         let handles = handles.clone();
+        let rdp_handles = rdp_handles.clone();
         let bufs = bufs.clone();
         // Shared timestamp: the last time the Shift key alone was pressed
         // (key="", shift=true).  Used by the time-based Backspace filter below.
         let last_shift_time: Arc<Mutex<Option<std::time::Instant>>> =
             Arc::new(Mutex::new(None));
         window.on_send_key(move |tab_id: SharedString, key: SharedString, ctrl: bool, alt: bool, shift: bool| {
+            // --- RDP tab: forward keystroke as RDP scancode --------------------
+            if rdp_handles.borrow().contains_key(tab_id.as_str()) {
+                if let Some(rdp_handle) = rdp_handles.borrow().get(tab_id.as_str()) {
+                    // Convert to RDP scancode and send keydown + keyup
+                    if let Some((scancode, extended)) = rdp_ffi::key_to_scancode(key.as_str(), ctrl, alt, shift) {
+                        let sc = if extended { scancode | 0x80 } else { scancode };
+                        rdp_handle.send_input(RdpInput::Keyboard { scancode: sc, down: true });
+                        rdp_handle.send_input(RdpInput::Keyboard { scancode: sc, down: false });
+                    }
+                }
+                return; // Skip SSH key processing for RDP tabs
+            }
             // Check whether the remote PTY switched to application cursor mode
             // (DECCKM, set by nano/vim via \x1b[?1h). In that mode the terminal
             // must send \x1bOA/B/C/D instead of \x1b[A/B/C/D.

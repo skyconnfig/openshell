@@ -4,10 +4,11 @@ import { IconButton, PrimaryButton, GhostButton } from "widgets.slint";
 export struct SessionInfo {
     id: string,
     name: string,
+    kind: string,      // "ssh" | "rdp"
     host: string,
     port: int,
     user: string,
-    auth: string,      // "password" | "key"
+    auth: string,      // "password" | "key" | "certificate"
     last-used: string, // ISO timestamp or "never"
 }
 
@@ -129,11 +130,11 @@ component SessionRow inherits Rectangle {
             overflow: elide;
         }
         Text {
-            text: session.host + ":" + session.port;
+            text: (session.kind == "rdp" ? "RDP  " : "SSH  ") + session.host + ":" + session.port;
             color: Theme.text-secondary;
             font-size: Theme.fs-sm;
             vertical-alignment: center;
-            width: 180px;
+            width: 200px;
             overflow: elide;
         }
         Text {

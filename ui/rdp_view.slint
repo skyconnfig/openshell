@@ -1,0 +1,131 @@
+import { Theme } from "theme.slint";
+
+// RDP remote desktop view.
+// Displays the framebuffer Image and forwards keyboard/mouse events.
+export component RdpView {
+    in property <string> tab-id;
+    in property <image> frame;
+    in property <int> frame-width;
+    in property <int> frame-height;
+    in property <string> status-line;
+    in property <bool> connected;
+
+    callback send-key(string, string, bool, bool, bool);
+    callback send-mouse(string, int, int, int, int);
+    callback terminal-resize(string, float, float);
+
+    min-width: 640px;
+    min-height: 400px;
+
+    // Main content area with the framebuffer image
+    Rectangle {
+        width: 100%;
+        height: 100%;
+
+        // If connected and we have a frame, render it
+        if root.connected && root.frame-width > 0 : Rectangle {
+            x: (parent.width - min(self.width, parent.width)) / 2;
+            y: (parent.height - min(self.height, parent.height - 24px)) / 2;
+            width: min(parent.width, root.frame-width * 1px);
+            height: min(parent.height - 24px, root.frame-height * 1px);
+
+            // Render RDP framebuffer, scaled to fit
+            Image {
+                source: root.frame;
+                width: parent.width;
+                height: parent.height;
+                image-fit: contain;
+            }
+        }
+
+        // Connecting / disconnected overlay
+        if !root.connected || root.frame-width == 0 : Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.status-line;
+            color: Theme.text-muted;
+            font-size: Theme.fs-lg;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+
+    // Status bar at the bottom
+    Rectangle {
+        y: parent.height - 24px;
+        width: parent.width;
+        height: 24px;
+        background: Theme.bg-panel;
+
+        Text {
+            x: 10px;
+            y: 0;
+            width: parent.width - 20px;
+            height: parent.height;
+            text: root.status-line;
+            color: Theme.text-secondary;
+            font-size: Theme.fs-xs;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        // Connection indicator dot
+        Rectangle {
+            x: parent.width - 16px;
+            y: (parent.height - 8px) / 2;
+            width: 8px; height: 8px;
+            border-radius: 4px;
+            background: root.connected ? Theme.success : Theme.text-muted;
+        }
+    }
+
+    // Keyboard input capture
+    focus-scope := FocusScope {
+        width: 100%;
+        height: parent.height - 24px;
+        enabled: root.connected;
+
+        key-pressed(event) => {
+            if !root.connected { return accept; }
+            root.send-key(
+                root.tab-id,
+                event.text,
+                event.modifiers.control,
+                event.modifiers.alt,
+                event.modifiers.shift
+            );
+            accept
+        }
+    }
+
+    // Mouse input capture
+    mouse-area := TouchArea {
+        width: 100%;
+        height: parent.height - 24px;
+
+        // Unified pointer handler (move, press, release)
+        // Note: pointer-event returns void in Slint 1.8, coordinates not available via event struct
+        pointer-event(ev) => {
+            if !root.connected { return; }
+            if ev.kind == PointerEventKind.move {
+                root.send-mouse(root.tab-id, 0, 0, 0, 0);
+            } else if ev.kind == PointerEventKind.down {
+                root.send-mouse(root.tab-id, 1, 0, 0, 0);
+            } else if ev.kind == PointerEventKind.up {
+                root.send-mouse(root.tab-id, 2, 0, 0, 0);
+            }
+        }
+
+        // Mouse wheel / scroll
+        scroll-event(ev) => {
+            if !root.connected { return reject; }
+            if ev.delta-y < 0 {
+                root.send-mouse(root.tab-id, 3, 0, 0, 0);
+            } else {
+                root.send-mouse(root.tab-id, 4, 0, 0, 0);
+            }
+            accept
+        }
+    }
+}

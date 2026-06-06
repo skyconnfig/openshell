@@ -1,35 +1,51 @@
 import { Theme } from "theme.slint";
 import { LabeledInput, PrimaryButton, GhostButton } from "widgets.slint";
 
+// Extended draft that supports both SSH and RDP sessions.
 export struct SessionDraft {
     id: string,
     name: string,
+    kind: string,              // "ssh" | "rdp"
     host: string,
     port: int,
     user: string,
-    auth: string,      // "password" | "key"
+    auth: string,              // SSH: "password" | "key"; RDP: "password" | "certificate"
     password: string,
+    // SSH-specific
     private-key-path: string,
+    // RDP-specific
+    resolution-width: int,
+    resolution-height: int,
+    color-depth: int,          // 16, 24, or 32
+    certificate-path: string,
 }
 
-// Modal dialog for creating / editing an SSH session.
+// Modal dialog for creating / editing an SSH or RDP session.
 // The dialog is purely presentational — it stores values in mutable
-// properties and emits `submit` / `cancel` callbacks up to the main window.
+// properties and emits submit / cancel callbacks up to the main window.
 export component SessionDialog inherits Rectangle {
     in-out property <bool> is-open: false;
     in-out property <bool> is-editing: false;
     in-out property <string> draft-id;
+    in-out property <string> draft-kind: "ssh";       // "ssh" | "rdp"
     in-out property <string> draft-name;
     in-out property <string> draft-host;
     in-out property <string> draft-port: "22";
     in-out property <string> draft-user: "root";
     in-out property <string> draft-auth: "password";
     in-out property <string> draft-password;
+    // SSH
     in-out property <string> draft-key-path;
+    // RDP
+    in-out property <string> draft-resolution-width: "1280";
+    in-out property <string> draft-resolution-height: "720";
+    in-out property <string> draft-color-depth: "32";
+    in-out property <string> draft-certificate-path;
 
     callback submit(SessionDraft);
     callback cancel();
-    callback pick-key-file();   // open a native file picker for the private key
+    callback pick-key-file();       // SSH private key file picker
+    callback pick-cert-file();      // RDP certificate file picker
 
     visible: is-open;
     background: #000000aa;
@@ -41,8 +57,8 @@ export component SessionDialog inherits Rectangle {
     }
 
     Rectangle {
-        width: 420px;
-        height: 460px;
+        width: 460px;
+        height: 520px;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
         background: Theme.bg-panel;
@@ -52,20 +68,70 @@ export component SessionDialog inherits Rectangle {
         drop-shadow-blur: 24px;
         drop-shadow-color: #00000080;
 
-        // Prevent backdrop click from propagating when user clicks inside the card
-        TouchArea {
-            width: 100%; height: 100%;
-        }
+        TouchArea { width: 100%; height: 100%; }
 
         VerticalLayout {
             padding: 20px;
-            spacing: 14px;
+            spacing: 12px;
 
             Text {
                 text: is-editing ? @tr("Edit session") : @tr("New session");
                 color: Theme.text-primary;
                 font-size: Theme.fs-xl;
                 font-weight: 600;
+            }
+
+            // Session type toggle: SSH | RDP
+            HorizontalLayout {
+                spacing: 6px;
+                Rectangle {
+                    height: 28px;
+                    horizontal-stretch: 1;
+                    border-radius: Theme.radius-sm;
+                    border-width: 1px;
+                    background: root.draft-kind == "ssh" ? Theme.accent : Theme.bg-root;
+                    border-color: root.draft-kind == "ssh" ? Theme.accent : Theme.border-subtle;
+                    Text {
+                        text: "SSH";
+                        color: root.draft-kind == "ssh" ? white : Theme.text-primary;
+                        font-size: Theme.fs-md;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.draft-kind = "ssh";
+                            root.draft-port = "22";
+                            root.draft-user = "root";
+                            root.draft-auth = "password";
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 28px;
+                    horizontal-stretch: 1;
+                    border-radius: Theme.radius-sm;
+                    border-width: 1px;
+                    background: root.draft-kind == "rdp" ? Theme.accent : Theme.bg-root;
+                    border-color: root.draft-kind == "rdp" ? Theme.accent : Theme.border-subtle;
+                    Text {
+                        text: "RDP";
+                        color: root.draft-kind == "rdp" ? white : Theme.text-primary;
+                        font-size: Theme.fs-md;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.draft-kind = "rdp";
+                            root.draft-port = "3389";
+                            root.draft-user = "Administrator";
+                            root.draft-auth = "password";
+                        }
+                    }
+                }
             }
 
             LabeledInput {
@@ -84,7 +150,7 @@ export component SessionDialog inherits Rectangle {
                 }
                 LabeledInput {
                     label: @tr("Port");
-                    placeholder: "22";
+                    placeholder: root.draft-kind == "rdp" ? "3389" : "22";
                     value <=> root.draft-port;
                     horizontal-stretch: 1;
                 }
@@ -92,7 +158,7 @@ export component SessionDialog inherits Rectangle {
 
             LabeledInput {
                 label: @tr("Username");
-                placeholder: "root";
+                placeholder: root.draft-kind == "rdp" ? "Administrator" : "root";
                 value <=> root.draft-user;
             }
 
@@ -107,7 +173,7 @@ export component SessionDialog inherits Rectangle {
                 HorizontalLayout {
                     spacing: 6px;
                     Rectangle {
-                        height: 30px;
+                        height: 28px;
                         horizontal-stretch: 1;
                         border-radius: Theme.radius-sm;
                         border-width: 1px;
@@ -125,8 +191,9 @@ export component SessionDialog inherits Rectangle {
                             clicked => { root.draft-auth = "password"; }
                         }
                     }
-                    Rectangle {
-                        height: 30px;
+                    // SSH: show "Private key" option, RDP: show "Certificate" option
+                    if root.draft-kind == "ssh" : Rectangle {
+                        height: 28px;
                         horizontal-stretch: 1;
                         border-radius: Theme.radius-sm;
                         border-width: 1px;
@@ -144,17 +211,38 @@ export component SessionDialog inherits Rectangle {
                             clicked => { root.draft-auth = "key"; }
                         }
                     }
+                    if root.draft-kind == "rdp" : Rectangle {
+                        height: 28px;
+                        horizontal-stretch: 1;
+                        border-radius: Theme.radius-sm;
+                        border-width: 1px;
+                        background: root.draft-auth == "certificate" ? Theme.accent : Theme.bg-root;
+                        border-color: root.draft-auth == "certificate" ? Theme.accent : Theme.border-subtle;
+                        Text {
+                            text: @tr("Certificate");
+                            color: root.draft-auth == "certificate" ? white : Theme.text-primary;
+                            font-size: Theme.fs-md;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.draft-auth = "certificate"; }
+                        }
+                    }
                 }
             }
 
-            if root.draft-auth == "password" : LabeledInput {
+            // SSH: Password field
+            if root.draft-kind == "ssh" && root.draft-auth == "password" : LabeledInput {
                 label: @tr("Password");
                 placeholder: root.is-editing ? @tr("Leave blank to keep the current password") : "••••••••";
                 password: true;
                 value <=> root.draft-password;
             }
 
-            if root.draft-auth == "key" : VerticalLayout {
+            // SSH: Private key field
+            if root.draft-kind == "ssh" && root.draft-auth == "key" : VerticalLayout {
                 spacing: 4px;
                 Text {
                     text: @tr("Private key file");
@@ -208,10 +296,93 @@ export component SessionDialog inherits Rectangle {
                         }
                     }
                 }
+            }
+
+            // RDP: Password field
+            if root.draft-kind == "rdp" && root.draft-auth == "password" : LabeledInput {
+                label: @tr("Password");
+                placeholder: root.is-editing ? @tr("Leave blank to keep the current password") : "••••••••";
+                password: true;
+                value <=> root.draft-password;
+            }
+
+            // RDP: Certificate field
+            if root.draft-kind == "rdp" && root.draft-auth == "certificate" : VerticalLayout {
+                spacing: 4px;
                 Text {
-                    text: @tr("Pick the private key itself (not the .pub public key)");
-                    color: Theme.text-muted;
-                    font-size: Theme.fs-xs;
+                    text: @tr("Certificate file (.pem / .pfx)");
+                    color: Theme.text-secondary;
+                    font-size: Theme.fs-sm;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 32px;
+                        horizontal-stretch: 1;
+                        border-radius: Theme.radius-sm;
+                        border-width: 1px;
+                        border-color: certin.has-focus ? Theme.accent : Theme.border-subtle;
+                        background: Theme.bg-root;
+                        certin := TextInput {
+                            x: 10px; y: 0px;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            text <=> root.draft-certificate-path;
+                            color: Theme.text-primary;
+                            font-size: Theme.fs-md;
+                            vertical-alignment: center;
+                            single-line: true;
+                        }
+                        if root.draft-certificate-path == "" : Text {
+                            x: 10px; y: 0px;
+                            height: parent.height;
+                            text: "/path/to/certificate.pem";
+                            color: Theme.text-muted;
+                            font-size: Theme.fs-md;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Rectangle {
+                        width: 64px; height: 32px;
+                        border-radius: Theme.radius-sm;
+                        border-width: 1px;
+                        border-color: Theme.border-subtle;
+                        background: cert-browse.has-hover ? Theme.bg-hover : Theme.bg-elevated;
+                        Text {
+                            text: @tr("Browse…");
+                            color: Theme.text-primary;
+                            font-size: Theme.fs-sm;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        cert-browse := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.pick-cert-file(); }
+                        }
+                    }
+                }
+            }
+
+            // RDP: Resolution, visible when draft-kind == "rdp"
+            if root.draft-kind == "rdp" : HorizontalLayout {
+                spacing: 10px;
+                LabeledInput {
+                    label: @tr("Width");
+                    placeholder: "1280";
+                    value <=> root.draft-resolution-width;
+                    horizontal-stretch: 1;
+                }
+                LabeledInput {
+                    label: @tr("Height");
+                    placeholder: "720";
+                    value <=> root.draft-resolution-height;
+                    horizontal-stretch: 1;
+                }
+                LabeledInput {
+                    label: @tr("Color (bit)");
+                    placeholder: "32";
+                    value <=> root.draft-color-depth;
+                    horizontal-stretch: 1;
                 }
             }
 
@@ -230,12 +401,17 @@ export component SessionDialog inherits Rectangle {
                         root.submit({
                             id: root.draft-id,
                             name: root.draft-name,
+                            kind: root.draft-kind,
                             host: root.draft-host,
                             port: root.draft-port.to-float(),
                             user: root.draft-user,
                             auth: root.draft-auth,
                             password: root.draft-password,
                             private-key-path: root.draft-key-path,
+                            resolution-width: root.draft-resolution-width.to-float(),
+                            resolution-height: root.draft-resolution-height.to-float(),
+                            color-depth: root.draft-color-depth.to-float(),
+                            certificate-path: root.draft-certificate-path,
                         });
                     }
                 }

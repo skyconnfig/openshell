@@ -248,6 +248,30 @@ export component TerminalView inherits Rectangle {
 
             init => { ime-input.focus(); }
 
+                // ── Keyboard event filter ─────────────────────────
+                key-pressed(event) => {
+                    // Ctrl+Shift+C: copy terminal buffer
+                    if (event.modifiers.control && event.modifiers.shift
+                            && (event.text == "c" || event.text == "C"
+                                || event.text == "\u{0003}")) {
+                        root.copy-terminal-text();
+                        accept
+                    // Ctrl+V or Ctrl+Shift+V: paste from clipboard
+                    } else if (event.modifiers.control
+                            && (event.text == "v" || event.text == "V"
+                                || event.text == "\u{0016}")) {
+                        root.paste-from-clipboard();
+                        ime-input.focus();
+                        accept
+                    // All other keys (printable, Ctrl+X, arrows, etc.)
+                    } else {
+                        root.send-key(event.text, event.modifiers.control,
+                                      event.modifiers.alt, event.modifiers.shift);
+                        accept
+                    }
+                }
+
+
             Timer {
                 running: ime-input.has-focus;
                 interval: 530ms;
@@ -492,34 +516,6 @@ export component TerminalView inherits Rectangle {
                     if (self.has-focus) { key-capture.cursor-blink = true; }
                 }
 
-                key-pressed(event) => {
-                    // ── Ctrl+Shift+C: copy terminal buffer ───────────────────
-                    if (event.modifiers.control && event.modifiers.shift
-                            && (event.text == "c" || event.text == "C"
-                                || event.text == "\u{0003}")) {
-                        root.copy-terminal-text();
-                        accept
-                    // ── Ctrl+V or Ctrl+Shift+V: paste from clipboard ─────────
-                    // We accept Ctrl+V (with or without Shift) so the familiar
-                    // Windows paste shortcut works in addition to Ctrl+Shift+V.
-                    } else if (event.modifiers.control
-                            && (event.text == "v" || event.text == "V"
-                                || event.text == "\u{0016}")) {
-                        root.paste-from-clipboard();
-                        // Clipboard access on Windows can deliver WM_KILLFOCUS.
-                        // Restore focus explicitly so the cursor keeps blinking.
-                        ime-input.focus();
-                        accept
-                    // ── All other keys (printable, Ctrl+X, arrows, …) ────────
-                    // Return `accept` for everything: `reject` bubbles without
-                    // inserting the char into TextInput, so `edited` never fires
-                    // for regular keystrokes — the character would be lost.
-                    } else {
-                        root.send-key(event.text, event.modifiers.control,
-                                      event.modifiers.alt, event.modifiers.shift);
-                        accept
-                    }
-                }
 
                 // Safety-net for IME commits delivered via WM_IME_CHAR (which
                 // may not fire key-pressed).  Guard with preedit-text == "" to
@@ -557,6 +553,18 @@ export component TerminalView inherits Rectangle {
                         background: Theme.bg-root;
                         border-radius: 3px;
                         horizontal-stretch: 1;
+                    find-focus := FocusScope {
+                        forward-focus: find-input;
+                        key-pressed(e) => {
+                            if (e.text == "\u{001b}") {
+                                root.find-active = false;
+                                root.find-query-changed("");
+                                ime-input.focus();
+                                accept
+                            } else {
+                                reject
+                            }
+                        }
                         find-input := TextInput {
                             x: 6px;
                             width: parent.width - 12px;
@@ -565,21 +573,10 @@ export component TerminalView inherits Rectangle {
                             font-size: Theme.fs-md;
                             vertical-alignment: center;
                             single-line: true;
-                            // Grab focus as soon as the bar appears.
                             init => { self.focus(); }
                             edited => { root.find-query-changed(self.text); }
-                            key-pressed(e) => {
-                                if (e.text == "\u{001b}") {       // Esc closes find
-                                    root.find-active = false;
-                                    root.find-query-changed("");
-                                    self.text = "";
-                                    ime-input.focus();
-                                    accept
-                                } else {
-                                    reject
-                                }
-                            }
                         }
+                    }
                     }
                     Rectangle {
                         width: 24px;

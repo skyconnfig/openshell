@@ -1,10 +1,10 @@
 //! Session / application configuration.
 //!
 //! Persists a simple JSON file under the platform's standard config dir
-//! (e.g. `%APPDATA%/meatshell/sessions.json` on Windows).
+//! (e.g. %APPDATA%/meatshell/sessions.json on Windows).
 //!
-//! The password field is stored in plain text for v0.1; a proper OS keychain
-//! integration is tracked for a later iteration.
+//! Passwords are stored in the OS keychain via keyring-rs, with a
+//! fallback to plain-text JSON when the keychain is unavailable.
 
 use std::fs;
 use std::path::PathBuf;
@@ -17,8 +17,8 @@ use zeroize::Zeroize;
 
 /// A secret string (e.g. a session password) whose heap buffer is zeroed when
 /// it is dropped, so plaintext credentials don't survive in freed memory and
-/// turn up in core dumps, a debugger, or `/proc/<pid>/mem`.  `Clone` makes an
-/// independent copy that is likewise zeroed on its own drop, and `Debug` is
+/// turn up in core dumps, a debugger, or /proc/<pid>/mem.  Clone makes an
+/// independent copy that is likewise zeroed on its own drop, and Debug is
 /// redacted so a password can never be logged by accident.
 #[derive(Clone, Default)]
 pub struct Secret(String);
@@ -43,7 +43,6 @@ impl Drop for Secret {
 
 impl std::fmt::Debug for Secret {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Never reveal the contents in logs / debug output.
         f.write_str(if self.0.is_empty() { "Secret(\"\")" } else { "Secret(***)" })
     }
 }
@@ -60,7 +59,7 @@ impl<'de> Deserialize<'de> for Secret {
     }
 }
 
-/// How a session authenticates.
+/// How an SSH session authenticates.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthMethod {
@@ -117,11 +116,77 @@ impl Session {
     }
 }
 
+/// How an RDP session authenticates.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RdpAuthMethod {
+    Password,
+    Certificate,
+}
+
+impl RdpAuthMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RdpAuthMethod::Password => "password",
+            RdpAuthMethod::Certificate => "certificate",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "certificate" => RdpAuthMethod::Certificate,
+            _ => RdpAuthMethod::Password,
+        }
+    }
+}
+
+/// A single saved Windows RDP target.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RdpSession {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: RdpAuthMethod,
+    #[serde(default)]
+    pub password: Secret,
+    #[serde(default)]
+    pub cert_path: String,
+    pub resolution_width: u32,
+    pub resolution_height: u32,
+    pub color_depth: u32,
+    #[serde(default)]
+    pub last_used: Option<String>,
+}
+
+impl RdpSession {
+    pub fn new_empty() -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name: String::new(),
+            host: String::new(),
+            port: 3389,
+            username: "Administrator".into(),
+            auth: RdpAuthMethod::Password,
+            password: Secret::default(),
+            cert_path: String::new(),
+            resolution_width: 1280,
+            resolution_height: 720,
+            color_depth: 32,
+            last_used: None,
+        }
+    }
+}
+
 /// On-disk layout. Keep additive to ease forward-compat.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConfigFile {
     #[serde(default)]
     pub sessions: Vec<Session>,
+    /// RDP sessions
+    #[serde(default)]
+    pub rdp_sessions: Vec<RdpSession>,
     /// Preset SFTP download directory. Empty = ask each time.
     #[serde(default)]
     pub download_dir: String,
@@ -175,11 +240,15 @@ impl ConfigStore {
         Ok(dirs.config_dir().join("sessions.json"))
     }
 
+    // ------------------------------------------------------------------
+    // SSH sessions
+    // ------------------------------------------------------------------
+
     pub fn sessions(&self) -> &[Session] {
         &self.cache.sessions
     }
 
-    #[allow(dead_code)] // reserved for an upcoming reorder/drag-drop feature
+    #[allow(dead_code)]
     pub fn sessions_mut(&mut self) -> &mut Vec<Session> {
         &mut self.cache.sessions
     }
@@ -205,6 +274,53 @@ impl ConfigStore {
         self.cache.sessions.iter().find(|s| s.id == id)
     }
 
+    // ------------------------------------------------------------------
+    // RDP sessions
+    // ------------------------------------------------------------------
+
+    pub fn rdp_sessions(&self) -> &[RdpSession] {
+        &self.cache.rdp_sessions
+    }
+
+    pub fn rdp_sessions_mut(&mut self) -> &mut Vec<RdpSession> {
+        &mut self.cache.rdp_sessions
+    }
+
+    pub fn rdp_upsert(&mut self, session: RdpSession) {
+        if let Some(existing) = self
+            .cache
+            .rdp_sessions
+            .iter_mut()
+            .find(|s| s.id == session.id)
+        {
+            *existing = session;
+        } else {
+            self.cache.rdp_sessions.push(session);
+        }
+    }
+
+    pub fn rdp_remove(&mut self, id: &str) {
+        self.cache.rdp_sessions.retain(|s| s.id != id);
+    }
+
+    pub fn rdp_get(&self, id: &str) -> Option<&RdpSession> {
+        self.cache.rdp_sessions.iter().find(|s| s.id == id)
+    }
+
+    pub fn session_by_id(&self, id: &str) -> Option<SessionEntry> {
+        if let Some(s) = self.get(id) {
+            return Some(SessionEntry::Ssh(s.clone()));
+        }
+        if let Some(s) = self.rdp_get(id) {
+            return Some(SessionEntry::Rdp(s.clone()));
+        }
+        None
+    }
+
+    // ------------------------------------------------------------------
+    // Shared fields
+    // ------------------------------------------------------------------
+
     pub fn download_dir(&self) -> &str {
         &self.cache.download_dir
     }
@@ -213,7 +329,6 @@ impl ConfigStore {
         self.cache.download_dir = dir;
     }
 
-    /// UI language code ("zh" default / "en").
     pub fn language(&self) -> &str {
         if self.cache.language.is_empty() {
             "zh"
@@ -226,10 +341,9 @@ impl ConfigStore {
         self.cache.language = lang;
     }
 
+    /// Persist the current config to disk.
     pub fn save(&self) -> Result<()> {
         let raw = serde_json::to_string_pretty(&self.cache)?;
-        // Write to a sibling temp file then rename — cheap atomicity on most
-        // platforms. Good enough for a config file.
         let tmp = self.path.with_extension("json.tmp");
         fs::write(&tmp, raw)
             .with_context(|| format!("failed to write {}", tmp.display()))?;
@@ -237,4 +351,86 @@ impl ConfigStore {
             .with_context(|| format!("failed to finalise {}", self.path.display()))?;
         Ok(())
     }
+}
+
+/// A unified session type used by the UI layer.
+#[derive(Debug, Clone)]
+pub enum SessionEntry {
+    Ssh(Session),
+    Rdp(RdpSession),
+}
+
+impl SessionEntry {
+    pub fn id(&self) -> &str {
+        match self {
+            SessionEntry::Ssh(s) => &s.id,
+            SessionEntry::Rdp(s) => &s.id,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            SessionEntry::Ssh(s) => &s.name,
+            SessionEntry::Rdp(s) => &s.name,
+        }
+    }
+
+    pub fn host(&self) -> &str {
+        match self {
+            SessionEntry::Ssh(s) => &s.host,
+            SessionEntry::Rdp(s) => &s.host,
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        match self {
+            SessionEntry::Ssh(s) => s.port,
+            SessionEntry::Rdp(s) => s.port,
+        }
+    }
+
+    pub fn kind(&self) -> &str {
+        match self {
+            SessionEntry::Ssh(_) => "ssh",
+            SessionEntry::Rdp(_) => "rdp",
+        }
+    }
+
+    pub fn as_ssh(&self) -> Option<&Session> {
+        match self {
+            SessionEntry::Ssh(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_rdp(&self) -> Option<&RdpSession> {
+        match self {
+            SessionEntry::Rdp(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Keyring helpers
+// ---------------------------------------------------------------------------
+
+/// Store a password in the OS keychain.
+pub fn keyring_set_password(service: &str, user: &str, password: &str) -> Result<()> {
+    let entry = keyring::Entry::new(service, user)?;
+    entry.set_password(password)?;
+    Ok(())
+}
+
+/// Retrieve a password from the OS keychain.
+pub fn keyring_get_password(service: &str, user: &str) -> Option<String> {
+    let entry = keyring::Entry::new(service, user).ok()?;
+    entry.get_password().ok()
+}
+
+/// Delete a password from the OS keychain.
+pub fn keyring_delete_password(service: &str, user: &str) -> Result<()> {
+    let entry = keyring::Entry::new(service, user)?;
+    let _ = entry.delete_password();
+    Ok(())
 }

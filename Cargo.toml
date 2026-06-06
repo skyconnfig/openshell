@@ -9,10 +9,14 @@ repository = "https://github.com/your/meatshell"
 readme = "README.md"
 rust-version = "1.75"
 
+[features]
+default = []
+rdp = []
+
 [dependencies]
-slint = { version = "1.8", features = ["compat-1-2"] }
+slint = { version = "~1.8", features = ["compat-1-2"] }
 # Direct access to the winit window/events (OS file-drop for drag-and-drop upload).
-i-slint-backend-winit = "1.16"
+i-slint-backend-winit = "~1.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
@@ -37,9 +41,15 @@ arboard = "3"
 # Zeroes password buffers on drop so plaintext credentials don't linger in
 # freed heap memory (core dumps / debuggers / /proc/pid/mem).
 zeroize = "1"
+libc = "0.2"
+keyring = "2"
 
 [build-dependencies]
 slint-build = "1.8"
+# RDP support via FreeRDP FFI. The C shim (rdp_shim/shim.c) is compiled by build.rs.
+# Requires libfreerdp3-dev (Linux), freerdp (brew on macOS), or vcpkg install freerdp (Windows).
+cc = "1"
+pkg-config = "0.3"
 
 # Embeds assets/meatshell.ico into the .exe so Explorer / taskbar / shortcuts
 # show the app icon. Windows-only; ignored on other targets.
@@ -55,3 +65,4 @@ panic = "abort"
 
 [profile.dev]
 opt-level = 1
+
