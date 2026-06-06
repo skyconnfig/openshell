@@ -168,7 +168,7 @@ async fn run_sftp(
     self_tx: UnboundedSender<SftpCommand>,
     events: UnboundedSender<SessionEvent>,
 ) -> Result<()> {
-    let _ = events.send(SessionEvent::SftpStatus(t("SFTP 连接中...", "SFTP connecting...").into()));
+    let _ = events.send(SessionEvent::SftpStatus(t("SFTP 连接�?..", "SFTP connecting...").into()));
 
     // Open a dedicated SSH connection for SFTP.
     let config = Arc::new(client::Config {
@@ -305,7 +305,7 @@ async fn run_sftp(
                         let _ = events.send(SessionEvent::SftpStatus(path));
                     }
                     Err(e) => {
-                        let _ = events.send(SessionEvent::SftpStatus(format!("{}: {e}", t("列目录失败", "list directory failed"))));
+                        let _ = events.send(SessionEvent::SftpStatus(format!("{}: {e}", t("列目录失�?, "list directory failed"))));
                     }
                 }
             }
@@ -386,7 +386,7 @@ async fn run_sftp(
                             });
                         }
                         let _ =
-                            events.send(SessionEvent::SftpStatus(format!("{}: {}", t("已删除", "Deleted"), filename)));
+                            events.send(SessionEvent::SftpStatus(format!("{}: {}", t("已删�?, "Deleted"), filename)));
                     }
                     Err(e) => {
                         let _ = events.send(SessionEvent::SftpStatus(format!("{}: {e}", t("删除失败", "Delete failed"))));
@@ -398,7 +398,7 @@ async fn run_sftp(
                 // Sanitize the remote-controlled name before it becomes a local
                 // file path that we later hand to the OS "open" call.
                 let filename = sanitize_filename(&base_name(&remote));
-                let tmp_dir = std::env::temp_dir().join("meatshell");
+                let tmp_dir = std::env::temp_dir().join("openshell");
                 let _ = tokio::fs::create_dir_all(&tmp_dir).await;
                 let local = tmp_dir.join(&filename);
                 let local_str = local.to_string_lossy().to_string();
@@ -448,7 +448,7 @@ fn base_name(path: &str) -> String {
         .to_string()
 }
 
-/// Parent directory of a remote path ("/a/b" → "/a", "/a" → "/").
+/// Parent directory of a remote path ("/a/b" �?"/a", "/a" �?"/").
 fn parent_dir(path: &str) -> String {
     let p = path.trim_end_matches('/');
     match p.rfind('/') {
@@ -461,8 +461,8 @@ fn parent_dir(path: &str) -> String {
 ///
 /// Security: we must NOT route the path through a shell.  The previous
 /// `cmd /C start "" <path>` let cmd.exe re-parse the path, so a remote file name
-/// containing shell metacharacters (`&` `|` `>` `<` `^` …) — e.g. `foo&calc.exe`
-/// — could inject and run arbitrary commands when the user opened it.  We call
+/// containing shell metacharacters (`&` `|` `>` `<` `^` �? �?e.g. `foo&calc.exe`
+/// �?could inject and run arbitrary commands when the user opened it.  We call
 /// `ShellExecuteW` directly instead: it treats the path as one opaque string, so
 /// no shell parsing happens.  (`xdg-open` on Unix already takes a single argv
 /// argument and never invokes a shell.)
@@ -557,7 +557,7 @@ fn spawn_edit_watcher(
                 });
                 let _ = events.send(SessionEvent::SftpStatus(format!(
                     "{}: {}",
-                    t("已上传修改", "Re-uploaded changes"),
+                    t("已上传修�?, "Re-uploaded changes"),
                     filename
                 )));
             }

@@ -17,7 +17,7 @@ fn main() {
     #[cfg(windows)]
     {
         let mut res = winresource::WindowsResource::new();
-        res.set_icon("assets/meatshell.ico");
+        res.set_icon("assets/openshell.ico");
         res.compile().expect("failed to embed .ico");
     }
 

@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=meatshell
+Name=openshell
 GenericName=SSH Client
 Comment=Lightweight Rust + Slint SSH/SFTP client
-Comment[zh_CN]=轻量级 Rust + Slint SSH/SFTP 客户端
-Exec=meatshell
-Icon=meatshell
+Comment[zh_CN]=轻量�?Rust + Slint SSH/SFTP 客户�?
+Exec=openshell
+Icon=openshell
 Terminal=false
 Categories=Network;System;TerminalEmulator;Utility;
 Keywords=ssh;sftp;terminal;shell;
 StartupNotify=true
-StartupWMClass=meatshell
+StartupWMClass=openshell

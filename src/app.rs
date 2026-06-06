@@ -32,9 +32,9 @@ struct TermBuffer {
     view_offset: usize,
     /// Plain text of the rows currently displayed (drives find + selection).
     displayed_text: Vec<String>,
-    /// CSI-scanner state for rewriting HVP (`ESC [ … f`) into CUP (`ESC [ … H`).
+    /// CSI-scanner state for rewriting HVP (`ESC [ �?f`) into CUP (`ESC [ �?H`).
     /// vt100 0.15 only implements the `H` final byte, not the equivalent `f`
-    /// that btop/htop use for cursor positioning — without this rewrite their
+    /// that btop/htop use for cursor positioning �?without this rewrite their
     /// absolute-positioned full-screen output collapses into a scrolling mess.
     /// Kept here so a sequence split across read chunks is still translated.
     csi_state: CsiState,
@@ -117,7 +117,7 @@ pub fn run() -> Result<()> {
     let handles: Rc<RefCell<HashMap<String, SessionHandle>>> =
         Rc::new(RefCell::new(HashMap::new()));
 
-    // Per-tab SFTP handles — Arc<Mutex> so the event-pump OS thread and the
+    // Per-tab SFTP handles �?Arc<Mutex> so the event-pump OS thread and the
     // Slint UI thread can both post SftpCommands.
     let sftp_handles: SftpHandles = Arc::new(Mutex::new(HashMap::new()));
     // Once the user navigates manually in the SFTP panel, stop auto-following cd.
@@ -133,7 +133,7 @@ pub fn run() -> Result<()> {
     // Default: 80 cols × 24 rows (SSH spec minimum).
     let last_term_size: Arc<Mutex<(u32, u32)>> = Arc::new(Mutex::new((80, 24)));
 
-    // RDP handles — parallel to SSH handles but for RDP sessions.
+    // RDP handles �?parallel to SSH handles but for RDP sessions.
     let rdp_handles: Rc<RefCell<HashMap<String, rdp::RdpHandle>>> =
         Rc::new(RefCell::new(HashMap::new()));
     let rdp_events: Rc<RefCell<HashMap<String, tokio::sync::mpsc::UnboundedReceiver<RdpEvent>>>> =
@@ -144,10 +144,10 @@ pub fn run() -> Result<()> {
     // --- Build window + models ------------------------------------------
     // Set the Wayland app_id / X11 WM_CLASS *before* the window is created so
     // the Linux desktop shell can match the running window to the installed
-    // `meatshell.desktop` entry and show our icon in the dock/taskbar.  (On
+    // `openshell.desktop` entry and show our icon in the dock/taskbar.  (On
     // Windows the icon comes from the embedded .ico, so this is a no-op there.)
     #[cfg(target_os = "linux")]
-    let _ = slint::set_xdg_app_id("meatshell");
+    let _ = slint::set_xdg_app_id("openshell");
     let window = AppWindow::new().context("failed to build Slint window")?;
 
     // Apply the saved UI language.  The Rust-side flag drives `i18n::t(...)`;
@@ -310,24 +310,24 @@ pub fn run() -> Result<()> {
     // Open-source libraries shown in the About popup.
     {
         let libs: Vec<SharedString> = [
-            t("Slint — 图形界面框架 (GUI)", "Slint — GUI framework"),
-            t("russh / russh-keys — SSH 协议实现", "russh / russh-keys — SSH protocol"),
-            t("russh-sftp — SFTP 文件传输", "russh-sftp — SFTP file transfer"),
-            t("ssh-key — SSH 密钥解析", "ssh-key — SSH key parsing"),
-            t("tokio — 异步运行时", "tokio — async runtime"),
-            t("vt100 — 终端 (VT100/xterm) 解析", "vt100 — terminal (VT100/xterm) parser"),
-            t("sysinfo — 本机资源采集", "sysinfo — local resource sampling"),
-            t("serde / serde_json — 配置序列化", "serde / serde_json — config serialization"),
-            t("arboard — 系统剪贴板", "arboard — system clipboard"),
-            t("rfd — 原生文件对话框", "rfd — native file dialogs"),
-            t("directories — 配置目录定位", "directories — config dir lookup"),
-            t("chrono — 日期时间处理", "chrono — date/time handling"),
-            t("uuid — 唯一标识符", "uuid — unique identifiers"),
-            t("anyhow / thiserror — 错误处理", "anyhow / thiserror — error handling"),
-            t("tracing / tracing-subscriber — 日志", "tracing / tracing-subscriber — logging"),
-            t("futures / async-trait — 异步辅助", "futures / async-trait — async helpers"),
-            t("rand — 随机数", "rand — randomness"),
-            t("winresource — Windows 图标/资源嵌入", "winresource — Windows icon/resource embedding"),
+            t("Slint �?图形界面框架 (GUI)", "Slint �?GUI framework"),
+            t("russh / russh-keys �?SSH 协议实现", "russh / russh-keys �?SSH protocol"),
+            t("russh-sftp �?SFTP 文件传输", "russh-sftp �?SFTP file transfer"),
+            t("ssh-key �?SSH 密钥解析", "ssh-key �?SSH key parsing"),
+            t("tokio �?异步运行�?, "tokio �?async runtime"),
+            t("vt100 �?终端 (VT100/xterm) 解析", "vt100 �?terminal (VT100/xterm) parser"),
+            t("sysinfo �?本机资源采集", "sysinfo �?local resource sampling"),
+            t("serde / serde_json �?配置序列�?, "serde / serde_json �?config serialization"),
+            t("arboard �?系统剪贴�?, "arboard �?system clipboard"),
+            t("rfd �?原生文件对话�?, "rfd �?native file dialogs"),
+            t("directories �?配置目录定位", "directories �?config dir lookup"),
+            t("chrono �?日期时间处理", "chrono �?date/time handling"),
+            t("uuid �?唯一标识�?, "uuid �?unique identifiers"),
+            t("anyhow / thiserror �?错误处理", "anyhow / thiserror �?error handling"),
+            t("tracing / tracing-subscriber �?日志", "tracing / tracing-subscriber �?logging"),
+            t("futures / async-trait �?异步辅助", "futures / async-trait �?async helpers"),
+            t("rand �?随机�?, "rand �?randomness"),
+            t("winresource �?Windows 图标/资源嵌入", "winresource �?Windows icon/resource embedding"),
         ]
         .iter()
         .map(|s| (*s).into())
@@ -483,7 +483,7 @@ pub fn run() -> Result<()> {
     );
     Box::leak(Box::new(rdp_timer));
 
-    // OS file drag-and-drop → upload to the active session's SFTP directory,
+    // OS file drag-and-drop �?upload to the active session's SFTP directory,
     // but only when the file is dropped over the file-list area.
     {
         use i_slint_backend_winit::winit::event::WindowEvent as WEvent;
@@ -620,7 +620,7 @@ fn handle_file_drop(win: &AppWindow, sftp_handles: &SftpHandles, path: String) {
         || client_y < zone_top
         || client_y > zone_bottom
     {
-        return; // dropped outside the file list — ignore
+        return; // dropped outside the file list �?ignore
     }
 
     let dir = active_sftp_path(win, &active);
@@ -738,8 +738,7 @@ fn wire_session_callbacks(
                 w.set_dialog_port(session.port.to_string().into());
                 w.set_dialog_user(session.user.clone().into());
                 w.set_dialog_auth(session.auth.as_str().into());
-                // Never echo the stored password back into the UI (issue #10) —
-                // leave it blank; a blank field on save keeps the existing one.
+                // Never echo the stored password back into the UI (issue #10) �?                // leave it blank; a blank field on save keeps the existing one.
                 w.set_dialog_password("".into());
                 w.set_dialog_key_path(session.private_key_path.clone().into());
                 w.set_dialog_editing(true);
@@ -918,7 +917,7 @@ fn wire_session_callbacks(
             let tab_id = format!("term-{}", uuid::Uuid::new_v4());
             let tab_title = session.name.clone();
 
-            // Seed the per-tab status so the sidebar shows "连接中 host" the
+            // Seed the per-tab status so the sidebar shows "连接�?host" the
             // moment this tab becomes active (the `changed active-tab-id`
             // handler fires refresh-sidebar right after set_active_tab_id below).
             tab_statuses.lock().unwrap().insert(
@@ -939,7 +938,7 @@ fn wire_session_callbacks(
             });
             terminals_model.push(TerminalState {
                 id: tab_id.clone().into(),
-                status: t("连接中...", "Connecting...").into(),
+                status: t("连接�?..", "Connecting...").into(),
                 spans: ModelRc::from(std::rc::Rc::new(VecModel::<TermSpan>::default())),
                 cursor_row: 0,
                 cursor_col: 0,
@@ -951,7 +950,7 @@ fn wire_session_callbacks(
                 sftp_entries: ModelRc::from(
                     std::rc::Rc::new(VecModel::<SftpEntry>::default()),
                 ),
-                sftp_status: t("SFTP 连接中...", "SFTP connecting...").into(),
+                sftp_status: t("SFTP 连接�?..", "SFTP connecting...").into(),
                 sftp_loading: true,
                 sftp_tree_nodes: ModelRc::from(
                     std::rc::Rc::new(VecModel::<SftpTreeNode>::default()),
@@ -977,7 +976,7 @@ fn wire_session_callbacks(
                     csi_state: CsiState::Normal,
                 },
             );
-            // Start in cd-auto-follow mode (flag = false → follow cd).
+            // Start in cd-auto-follow mode (flag = false �?follow cd).
             sftp_manual_nav.lock().unwrap().insert(tab_id.clone(), false);
             if let Some(w) = weak.upgrade() {
                 w.set_active_tab_id(tab_id.clone().into());
@@ -1001,7 +1000,7 @@ fn wire_session_callbacks(
 
             // Spawn separate SFTP connection for the same session.
             // The SFTP worker pushes SessionEvent::SftpEntries / SftpStatus
-            // back via the same receiver channel (rx) — no second receiver
+            // back via the same receiver channel (rx) �?no second receiver
             // needed because spawn_sftp accepts an UnboundedSender clone.
             let sftp_evt_tx = {
                 // We need the sender half of the channel that rx drains from.
@@ -1194,7 +1193,7 @@ fn compute_find_matches(rows: &[String], query: &str) -> Vec<TermMatch> {
     out
 }
 
-/// Order a selection so start ≤ end (by row, then column).
+/// Order a selection so start �?end (by row, then column).
 fn norm_sel(sr: u16, sc: u16, er: u16, ec: u16) -> (u16, u16, u16, u16) {
     if (sr, sc) <= (er, ec) {
         (sr, sc, er, ec)
@@ -1299,8 +1298,7 @@ fn selected_iface(st: &TabStatus) -> (String, u64, u64) {
 }
 
 /// Recompute the whole sidebar (status dot + CPU/mem/swap + dual network panel)
-/// for whichever tab is active.  Welcome tab → local machine; a session tab →
-/// that server.  The bottom network graph is always the local machine.
+/// for whichever tab is active.  Welcome tab �?local machine; a session tab �?/// that server.  The bottom network graph is always the local machine.
 /// Must run on the Slint event loop thread.
 fn refresh_sidebar(
     win: &AppWindow,
@@ -1356,11 +1354,11 @@ fn refresh_sidebar(
     };
 
     match status {
-        // A live session tab → remote resources + remote NIC on top.
+        // A live session tab �?remote resources + remote NIC on top.
         Some(st) if st.state == 1 => {
             win.set_conn_state(1);
             win.set_connection_state(st.host.clone().into());
-            win.set_resource_title(t("服务器资源", "Server resources").into());
+            win.set_resource_title(t("服务器资�?, "Server resources").into());
             win.set_cpu_percent(st.cpu);
             win.set_mem_percent(pct(st.mem_used_kib, st.mem_total_kib));
             win.set_swap_percent(pct(st.swap_used_kib, st.swap_total_kib));
@@ -1385,22 +1383,22 @@ fn refresh_sidebar(
         Some(st) if st.state == 2 => {
             win.set_conn_state(2);
             win.set_connection_state(format!("{} {}", st.host, t("已断开", "disconnected")).into());
-            win.set_resource_title(t("服务器资源", "Server resources").into());
+            win.set_resource_title(t("服务器资�?, "Server resources").into());
             clear_stats(win);
             set_top_local(win);
         }
         // Still connecting.
         Some(st) => {
             win.set_conn_state(0);
-            win.set_connection_state(format!("{} {}", t("连接中", "Connecting"), st.host).into());
-            win.set_resource_title(t("服务器资源", "Server resources").into());
+            win.set_connection_state(format!("{} {}", t("连接�?, "Connecting"), st.host).into());
+            win.set_resource_title(t("服务器资�?, "Server resources").into());
             clear_stats(win);
             set_top_local(win);
         }
-        // Welcome tab (or unknown) → local machine top + bottom.
+        // Welcome tab (or unknown) �?local machine top + bottom.
         None => {
             win.set_conn_state(0);
-            win.set_connection_state(t("未连接", "Not connected").into());
+            win.set_connection_state(t("未连�?, "Not connected").into());
             show_local_res(win);
             set_top_local(win);
         }
@@ -1462,7 +1460,7 @@ fn apply_session_event_to_window(
             // cursor movement, \r + line-redraw (readline), \x1b[K (erase to
             // EOL), alternate-screen switching, and all VT100/xterm sequences.
             // We then split the rendered screen at cursor_position() so Slint
-            // can insert the blinking "█" at the exact cursor cell.
+            // can insert the blinking "�? at the exact cursor cell.
             let built = {
                 let mut map = bufs.lock().unwrap();
                 if let Some(buf) = map.get_mut(tab_id) {
@@ -1503,7 +1501,7 @@ fn apply_session_event_to_window(
         }
         SessionEvent::Connected => {
             update_tab(&|t| t.connected = true);
-            update_terminal(&|t| t.status = crate::i18n::t("已连接", "Connected").into());
+            update_terminal(&|t| t.status = crate::i18n::t("已连�?, "Connected").into());
             if let Some(st) = statuses.lock().unwrap().get_mut(tab_id) {
                 st.state = 1;
             }
@@ -1513,7 +1511,7 @@ fn apply_session_event_to_window(
         }
         SessionEvent::Closed(reason) => {
             update_tab(&|t| t.connected = false);
-            update_terminal(&|t| t.status = format!("{} — {reason}", crate::i18n::t("已断开", "Disconnected")).into());
+            update_terminal(&|t| t.status = format!("{} �?{reason}", crate::i18n::t("已断开", "Disconnected")).into());
             if let Some(st) = statuses.lock().unwrap().get_mut(tab_id) {
                 st.state = 2;
             }
@@ -1538,7 +1536,7 @@ fn apply_session_event_to_window(
                 st.swap_total_kib = swap_total_kib;
                 st.net = net;
                 st.disks = disks;
-                // A sample means the channel is alive → treat as connected.
+                // A sample means the channel is alive �?treat as connected.
                 if st.state != 1 {
                     st.state = 1;
                 }
@@ -1612,7 +1610,7 @@ fn apply_session_event_to_window(
         } => {
             let detail = match state {
                 2 => t("失败", "Failed").to_string(),
-                1 => t("已完成", "Done").to_string(),
+                1 => t("已完�?, "Done").to_string(),
                 _ => {
                     if total > 0 {
                         format!("{}/{}", format_size(transferred), format_size(total))
@@ -1889,7 +1887,7 @@ fn wire_sftp_callbacks(
         });
     }
 
-    // Context menu → 删除 a remote file.
+    // Context menu �?删除 a remote file.
     {
         let sftp_handles = sftp_handles.clone();
         window.on_sftp_delete(move |tab_id: SharedString, path: SharedString| {
@@ -1901,7 +1899,7 @@ fn wire_sftp_callbacks(
         });
     }
 
-    // Context menu → 查看 (open read-only) / 编辑 (open + auto-reupload).
+    // Context menu �?查看 (open read-only) / 编辑 (open + auto-reupload).
     {
         let sftp_handles = sftp_handles.clone();
         window.on_sftp_view(move |tab_id: SharedString, path: SharedString| {
@@ -1978,10 +1976,8 @@ fn wire_key_input(
                 tab_id, key.as_str(), ctrl, alt, shift, app_cursor
             );
 
-            // ── Shift / Backspace 诊断日志 (info 级, 无需 RUST_LOG=debug) ─────
-            // 每个 Shift 相关事件都打印 key 的 Unicode 码位，方便对比
-            // 左Shift / 右Shift 是否产生不同的 key 字符串。
-            if shift || key.as_str() == "\u{0008}" {
+            // ── Shift / Backspace 诊断日志 (info �? 无需 RUST_LOG=debug) ─────
+            // 每个 Shift 相关事件都打�?key �?Unicode 码位，方便对�?            // 左Shift / 右Shift 是否产生不同�?key 字符串�?            if shift || key.as_str() == "\u{0008}" {
                 let codepoints: Vec<String> = if key.as_str().is_empty() {
                     vec!["(empty)".to_string()]
                 } else {
@@ -2005,28 +2001,23 @@ fn wire_key_input(
             // events even if they arrive with shift=false.
             if key.as_str().is_empty() && shift && !ctrl && !alt {
                 *last_shift_time.lock().unwrap() = Some(std::time::Instant::now());
-                tracing::info!("[KEY_DIAG] lone-Shift recorded → timestamp saved");
+                tracing::info!("[KEY_DIAG] lone-Shift recorded �?timestamp saved");
             }
 
-            // ── 拦截百度拼音注入的 Shift 标记字符（核心修复）────────────────────
+            // ── 拦截百度拼音注入�?Shift 标记字符（核心修复）────────────────────
             // 诊断日志证实，百度拼音通过 WH_KEYBOARD_LL 钩子，在 Shift 键按下时
-            // 向消息队列注入一个 C0 控制字符，而非空字符串：
-            //
-            //   左 Shift → U+0015 (Ctrl+U / NAK), shift=true, ctrl=false
-            //   右 Shift → U+0010 (Ctrl+P / DLE), shift=true, ctrl=false
+            // 向消息队列注入一�?C0 控制字符，而非空字符串�?            //
+            //   �?Shift �?U+0015 (Ctrl+U / NAK), shift=true, ctrl=false
+            //   �?Shift �?U+0010 (Ctrl+P / DLE), shift=true, ctrl=false
             //              紧接着注入: U+0008 (Backspace), shift=false
             //
-            // 这些字符绝对不应送入 PTY：
-            //   0x15 (Ctrl+U) 在 bash/vim 中会清空当前输入行 → "左Shift替换字符"
-            //   0x10 (Ctrl+P) 在 vim 中翻历史/触发补全     → "右Shift乱跳"
-            //   0x08 (Backspace) 紧随其后                   → "右Shift删除字符"
+            // 这些字符绝对不应送入 PTY�?            //   0x15 (Ctrl+U) �?bash/vim 中会清空当前输入�?�?"左Shift替换字符"
+            //   0x10 (Ctrl+P) �?vim 中翻历史/触发补全     �?"右Shift乱跳"
+            //   0x08 (Backspace) 紧随其后                   �?"右Shift删除字符"
             //
             // 合法独立 C0 键（Backspace=0x08, Tab=0x09, LF=0x0A, CR=0x0D,
-            // ESC=0x1B）不受此过滤影响，由下方代码单独处理。
-            //
-            // 检测到 IME Shift 标记后，记录时间戳，让 Layer 2 在 1500ms 内
-            // 拦截随后可能到来的 Backspace（右Shift场景，日志显示间隔约 914ms）。
-            if !ctrl && !alt {
+            // ESC=0x1B）不受此过滤影响，由下方代码单独处理�?            //
+            // 检测到 IME Shift 标记后，记录时间戳，�?Layer 2 �?1500ms �?            // 拦截随后可能到来�?Backspace（右Shift场景，日志显示间隔约 914ms）�?            if !ctrl && !alt {
                 if let Some(c) = key.as_str().chars().next() {
                     let cp = c as u32;
                     let is_standalone = matches!(cp, 0x08 | 0x09 | 0x0A | 0x0D | 0x1B);
@@ -2036,7 +2027,7 @@ fn wire_key_input(
                     {
                         *last_shift_time.lock().unwrap() = Some(std::time::Instant::now());
                         tracing::info!(
-                            "[KEY_DIAG] DROPPED IME C0 marker U+{:04X} (shift={}) → timestamp saved",
+                            "[KEY_DIAG] DROPPED IME C0 marker U+{:04X} (shift={}) �?timestamp saved",
                             cp, shift
                         );
                         return;
@@ -2053,12 +2044,12 @@ fn wire_key_input(
             // WM_KEYDOWN (virtual-key codes).  Slint uses WM_CHAR, so it
             // sees the injected byte and forwards it straight to us.
             //
-            // Fix: for C0 control chars (Ctrl+A…Ctrl+Z, i.e. 0x01–0x1A),
-            // use GetKeyState — which returns the key state *as of the last
-            // processed message*, not the live hardware state — to verify
+            // Fix: for C0 control chars (Ctrl+A…Ctrl+Z, i.e. 0x01�?x1A),
+            // use GetKeyState �?which returns the key state *as of the last
+            // processed message*, not the live hardware state �?to verify
             // the corresponding letter VK was actually queued as a keydown
             // before this WM_CHAR arrived.  If Q was never keyed down,
-            // GetKeyState(VK_Q) = 0 → the event is synthetic → drop it.
+            // GetKeyState(VK_Q) = 0 �?the event is synthetic �?drop it.
             #[cfg(windows)]
             if ctrl {
                 if let Some(ch) = key.as_str().chars().next() {
@@ -2067,7 +2058,7 @@ fn wire_key_input(
                     // state.  These C0 codes (0x09 Tab, 0x0a LF, 0x0d CR) are
                     // "double-duty" keys: pressing Enter while Ctrl is still
                     // physically held (e.g. just after Ctrl+O in nano) generates
-                    // Ctrl+M (0x0d) with ctrl=true — but GetKeyState(VK_M) is 0
+                    // Ctrl+M (0x0d) with ctrl=true �?but GetKeyState(VK_M) is 0
                     // because the user never pressed M.  Without this exemption
                     // the filter would silently drop the Enter, making it
                     // impossible to confirm nano's "File Name to Write:" prompt.
@@ -2099,20 +2090,20 @@ fn wire_key_input(
             //
             // Three-layer defence:
             //
-            //   Layer 1 – shift=true guard.
+            //   Layer 1 �?shift=true guard.
             //     The synthetic Backspace arrives during Shift keydown, so
-            //     GetKeyState(VK_SHIFT) is still "down" → Slint reports shift=true.
+            //     GetKeyState(VK_SHIFT) is still "down" �?Slint reports shift=true.
             //     Drop any Backspace (0x08) arriving while Shift is flagged.
             //
-            //   Layer 2 – time-based guard.
+            //   Layer 2 �?time-based guard.
             //     Baidu Pinyin posts WM_CHAR 0x08 asynchronously, so by the time
             //     the message is dequeued Shift may already read as "up"
-            //     → shift=false defeats Layer 1.
+            //     �?shift=false defeats Layer 1.
             //     Mitigation: we recorded the timestamp when the Shift key alone
             //     was pressed (key="", shift=true) a few lines above.  Drop any
             //     Backspace arriving within 200 ms of that moment.
             //
-            //   Layer 3 – GetKeyState guard (belt-and-suspenders).
+            //   Layer 3 �?GetKeyState guard (belt-and-suspenders).
             //     If VK_BACK is not actually "down" (i.e. no real WM_KEYDOWN
             //     VK_BACK was ever queued), the Backspace must be synthetic.
             if key.as_str() == "\u{0008}" && !ctrl && !alt {
@@ -2121,10 +2112,9 @@ fn wire_key_input(
                     tracing::info!("[KEY_DIAG] Backspace DROPPED by layer-1 (shift=true)");
                     return;
                 }
-                // Layer 2 — 时间窗口 1500ms
-                // 日志显示百度拼音注入 U+0010(右Shift标记) 到 Backspace 之间
-                // 间隔约 914ms，因此窗口设为 1500ms 以覆盖该场景。
-                let (shift_just_pressed, elapsed_ms) = {
+                // Layer 2 �?时间窗口 1500ms
+                // 日志显示百度拼音注入 U+0010(右Shift标记) �?Backspace 之间
+                // 间隔�?914ms，因此窗口设�?1500ms 以覆盖该场景�?                let (shift_just_pressed, elapsed_ms) = {
                     let guard = last_shift_time.lock().unwrap();
                     match *guard {
                         Some(t) => {
@@ -2147,7 +2137,7 @@ fn wire_key_input(
                     tracing::info!("[KEY_DIAG] Backspace DROPPED by layer-3 (VK_BACK not down)");
                     return;
                 }
-                tracing::info!("[KEY_DIAG] Backspace PASSED all filters → sent to PTY");
+                tracing::info!("[KEY_DIAG] Backspace PASSED all filters �?sent to PTY");
             }
 
             let bytes = key_to_pty_bytes(key.as_str(), ctrl, alt, app_cursor);
@@ -2171,11 +2161,11 @@ fn wire_key_input(
     // terminal_view.slint now passes the FocusScope height (not the full
     // TerminalView height), so the SFTP panel is already excluded.
     // Layout breakdown for the FocusScope:
-    //   16 px  – bottom strip (TouchArea for focus-regain)
-    //    8 px  – y-offset of the output Text element inside the Flickable
+    //   16 px  �?bottom strip (TouchArea for focus-regain)
+    //    8 px  �?y-offset of the output Text element inside the Flickable
     // = 24 px  total vertical chrome within FocusScope
     //
-    // Consolas 13 px renders at ≈ 8 px wide × 16 px tall per cell.
+    // Consolas 13 px renders at �?8 px wide × 16 px tall per cell.
     {
         let handles = handles.clone();
         let bufs_resize = bufs.clone(); // keep bufs alive for the copy handler below
@@ -2241,7 +2231,7 @@ fn wire_key_input(
         window.on_paste_from_clipboard(move |tab_id: SharedString| {
             // Clone the (Send) command sender for this tab so the clipboard read
             // can run off the UI thread.  Reading arboard on the event-loop
-            // thread is what froze the app on middle-click / paste — see the
+            // thread is what froze the app on middle-click / paste �?see the
             // copy handler above for the deadlock explanation.
             let sender = handles
                 .borrow()
@@ -2259,7 +2249,7 @@ fn wire_key_input(
         });
     }
 
-    // Context menu → 清空缓存: reset the local vt100 buffer (drops scrollback),
+    // Context menu �?清空缓存: reset the local vt100 buffer (drops scrollback),
     // wipe the displayed screen, then nudge the remote to redraw a fresh prompt.
     {
         let bufs_clear = bufs.clone();
@@ -2291,12 +2281,12 @@ fn wire_key_input(
                 });
             }
             if let Some(h) = handles_clear.borrow().get(&tid) {
-                h.send_raw(vec![0x0c]); // Ctrl+L → shell clears + redraws prompt
+                h.send_raw(vec![0x0c]); // Ctrl+L �?shell clears + redraws prompt
             }
         });
     }
 
-    // Context menu → 查找: store the query and recompute highlight rectangles.
+    // Context menu �?查找: store the query and recompute highlight rectangles.
     {
         let bufs_find = bufs.clone();
         let weak = window.as_weak();
@@ -2321,7 +2311,7 @@ fn wire_key_input(
         });
     }
 
-    // Mouse-wheel → scroll the scrollback history.
+    // Mouse-wheel �?scroll the scrollback history.
     {
         let bufs_scroll = bufs.clone();
         let weak = window.as_weak();
@@ -2396,7 +2386,7 @@ fn wire_key_input(
                         Some(extract_selection(&buf.displayed_text, sr, sc, er, ec))
                     }
                     _ => {
-                        buf.sel = None; // treat as click → clear selection
+                        buf.sel = None; // treat as click �?clear selection
                         None
                     }
                 }
@@ -2438,7 +2428,7 @@ fn wire_key_input(
                 let step = 2usize;
                 let Some((sr, sc, _er, ec)) = buf.sel else { return };
                 if dir < 0 {
-                    // Mouse above the top → reveal older lines.
+                    // Mouse above the top �?reveal older lines.
                     let new_off = (buf.view_offset + step).min(max_off);
                     let delta = new_off - buf.view_offset;
                     if delta == 0 {
@@ -2448,7 +2438,7 @@ fn wire_key_input(
                     let nsr = ((sr as usize) + delta).min(last as usize) as u16;
                     buf.sel = Some((nsr, sc, 0, ec));
                 } else if dir > 0 {
-                    // Mouse below the bottom → move toward the live tail.
+                    // Mouse below the bottom �?move toward the live tail.
                     let new_off = buf.view_offset.saturating_sub(step);
                     let delta = buf.view_offset - new_off;
                     if delta == 0 {
@@ -2487,12 +2477,12 @@ fn set_terminal_row(win: &AppWindow, tab_id: &str, mutator: impl Fn(&mut Termina
 /// Convert a Slint `KeyEvent.text` + modifier flags into the byte sequence
 /// that the remote PTY expects.
 ///
-/// Slint uses Unicode Private Use Area (`\u{F700}`…) for special keys.
+/// Slint uses Unicode Private Use Area (`\u{F700}`�? for special keys.
 /// Regular printable characters and C0 control characters are passed as-is.
 ///
 /// `app_cursor` mirrors the remote terminal's DECCKM mode (`\x1b[?1h/l`):
-/// when true the four arrow keys must use SS3 sequences (`\x1bOA`…) instead
-/// of the default CSI sequences (`\x1b[A`…).  Full-screen apps like nano and
+/// when true the four arrow keys must use SS3 sequences (`\x1bOA`�? instead
+/// of the default CSI sequences (`\x1b[A`�?.  Full-screen apps like nano and
 /// vim set this mode on startup.
 fn key_to_pty_bytes(key: &str, ctrl: bool, alt: bool, app_cursor: bool) -> Vec<u8> {
     // --- Special keys (Slint PUA code points) ------------------------------
@@ -2531,17 +2521,17 @@ fn key_to_pty_bytes(key: &str, ctrl: bool, alt: bool, app_cursor: bool) -> Vec<u
     }
 
     // Slint encodes Key::Return as "\n" (U+000A, LF).  Every real terminal
-    // emulator (xterm, WezTerm, PuTTY …) sends 0x0D (CR) for Enter because
+    // emulator (xterm, WezTerm, PuTTY �? sends 0x0D (CR) for Enter because
     // that is what a physical keyboard generates over a serial line.  bash/
     // readline happens to accept LF too, but ncurses apps in raw mode (nano,
-    // vim command-line, passwd prompts …) strictly require CR to confirm input.
-    // Ctrl+J (ctrl=true, "\n") intentionally stays 0x0A — it is a distinct
+    // vim command-line, passwd prompts �? strictly require CR to confirm input.
+    // Ctrl+J (ctrl=true, "\n") intentionally stays 0x0A �?it is a distinct
     // control character in some applications.
     if key == "\n" && !ctrl && !alt {
         return vec![0x0d];
     }
 
-    // Empty text (e.g. the Ctrl/Shift/Alt key press itself) — nothing to send.
+    // Empty text (e.g. the Ctrl/Shift/Alt key press itself) �?nothing to send.
     if key.is_empty() {
         return vec![];
     }
@@ -2565,7 +2555,7 @@ fn key_to_pty_bytes(key: &str, ctrl: bool, alt: bool, app_cursor: bool) -> Vec<u
             if key.chars().count() == 1 {
                 let upper = c.to_ascii_uppercase() as u8;
                 let ctrl_char: Option<u8> = match upper {
-                    b'A'..=b'Z' => Some(upper - b'A' + 1),      // Ctrl+A=\x01 … Ctrl+Z=\x1A
+                    b'A'..=b'Z' => Some(upper - b'A' + 1),      // Ctrl+A=\x01 �?Ctrl+Z=\x1A
                     b'[' => Some(0x1b),                           // Ctrl+[ = ESC
                     b'\\' => Some(0x1c),
                     b']' => Some(0x1d),
@@ -2625,20 +2615,17 @@ fn is_vk_back_down() -> bool {
 /// When we are called from within a `WM_CHAR` dispatch:
 ///
 /// * **Real Ctrl+Q**: `WM_KEYDOWN VK_Q` was dequeued and processed just
-///   before `WM_CHAR 0x11`, so `GetKeyState(VK_Q)` returns "down". ✓
-/// * **Synthetic injection** (Aula F99 / Baidu Pinyin tap-Left-Ctrl):
-///   the driver posts `WM_CHAR 0x11` directly — no `WM_KEYDOWN VK_Q` was
-///   ever in the queue — so `GetKeyState(VK_Q)` returns "up". → dropped ✓
-///
-/// `cp` is the C0 code point (0x01 = Ctrl+A … 0x1A = Ctrl+Z).
-/// Returns `true` (allow) for code points outside 0x01–0x1A (e.g. ESC).
+///   before `WM_CHAR 0x11`, so `GetKeyState(VK_Q)` returns "down". �?/// * **Synthetic injection** (Aula F99 / Baidu Pinyin tap-Left-Ctrl):
+///   the driver posts `WM_CHAR 0x11` directly �?no `WM_KEYDOWN VK_Q` was
+///   ever in the queue �?so `GetKeyState(VK_Q)` returns "up". �?dropped �?///
+/// `cp` is the C0 code point (0x01 = Ctrl+A �?0x1A = Ctrl+Z).
+/// Returns `true` (allow) for code points outside 0x01�?x1A (e.g. ESC).
 #[cfg(windows)]
 fn c0_letter_key_down(cp: u32) -> bool {
     if !(0x01..=0x1a).contains(&cp) {
-        return true; // Not a Ctrl+letter — don't filter.
+        return true; // Not a Ctrl+letter �?don't filter.
     }
-    let vk = (cp + 0x40) as i32; // 0x01→0x41 ('A') … 0x11→0x51 ('Q') …
-    #[allow(non_snake_case)]
+    let vk = (cp + 0x40) as i32; // 0x01�?x41 ('A') �?0x11�?x51 ('Q') �?    #[allow(non_snake_case)]
     extern "system" {
         fn GetKeyState(nVirtKey: i32) -> i16;
     }
@@ -2766,11 +2753,11 @@ impl TermBuffer {
     /// can only recover up to one screen of shift per call.  A single large
     /// burst can scroll many screens at once, so we split the input at newline
     /// boundaries into batches of at most ~half a screen of lines and capture
-    /// after each — that way no batch ever scrolls more than the diff can see,
+    /// after each �?that way no batch ever scrolls more than the diff can see,
     /// and nothing is lost.  (Splitting only on `\n` is safe: VT escape
     /// sequences never contain a newline.)
     fn ingest(&mut self, raw: &[u8]) {
-        // Rewrite HVP (`ESC [ … f`) → CUP (`ESC [ … H`) so vt100 (which only
+        // Rewrite HVP (`ESC [ �?f`) �?CUP (`ESC [ �?H`) so vt100 (which only
         // implements `H`) honours btop/htop's absolute cursor positioning.
         let bytes = self.rewrite_hvp(raw);
         let bytes = &bytes[..];
@@ -2852,7 +2839,7 @@ impl TermBuffer {
             (s.alternate_screen(), r, c)
         };
         if is_alt {
-            // Snap to live view whenever we're on the alt screen — this
+            // Snap to live view whenever we're on the alt screen �?this
             // prevents old history (accumulated before alt-screen was entered)
             // from mixing with the full-screen program's output after a scroll.
             self.view_offset = 0;
@@ -2860,7 +2847,7 @@ impl TermBuffer {
             return;
         }
         if is_fullscreen_refresh {
-            // Non-alt-screen full-screen refresh (btop, htop with alt disabled…).
+            // Non-alt-screen full-screen refresh (btop, htop with alt disabled�?.
             // Don't capture lines into history; they'd mix with the next frame.
             self.view_offset = 0;
             self.prev.clear();
@@ -2979,7 +2966,7 @@ impl TermBuffer {
     }
 }
 
-/// Standard 16-colour ANSI palette (VS Code "Dark+" values — reads well on the
+/// Standard 16-colour ANSI palette (VS Code "Dark+" values �?reads well on the
 /// dark terminal background).
 const ANSI16: [(u8, u8, u8); 16] = [
     (0x00, 0x00, 0x00), // 0 black
@@ -3001,7 +2988,7 @@ const ANSI16: [(u8, u8, u8); 16] = [
 ];
 
 /// Convert a vt100 colour (+ bold) to a Slint colour.  Bold + a base colour
-/// (0–7) maps to the bright variant (8–15), matching how terminals render
+/// (0�?) maps to the bright variant (8�?5), matching how terminals render
 /// `ls --color` (e.g. bold-green executables, bold-blue directories).
 fn vt_color_to_slint(color: vt100::Color, bold: bool) -> slint::Color {
     let (r, g, b) = match color {
@@ -3051,7 +3038,7 @@ fn idx_to_rgb(i: u8, bold: bool) -> (u8, u8, u8) {
 }
 
 /// Return the parent directory of `path`.
-/// "/a/b/c" → "/a/b", "/a" → "/", "/" → "/"
+/// "/a/b/c" �?"/a/b", "/a" �?"/", "/" �?"/"
 fn parent_path(path: &str) -> String {
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() {

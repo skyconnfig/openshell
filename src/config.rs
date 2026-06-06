@@ -1,7 +1,7 @@
 //! Session / application configuration.
 //!
 //! Persists a simple JSON file under the platform's standard config dir
-//! (e.g. %APPDATA%/meatshell/sessions.json on Windows).
+//! (e.g. %APPDATA%/openshell/sessions.json on Windows).
 //!
 //! Passwords are stored in the OS keychain via keyring-rs, with a
 //! fallback to plain-text JSON when the keychain is unavailable.
@@ -202,7 +202,7 @@ pub struct ConfigStore {
 
 impl ConfigStore {
     /// Load (or initialise) the config file. On any parse error we back up the
-    /// broken file and start fresh â€” losing saved sessions is better than
+    /// broken file and start fresh â€?losing saved sessions is better than
     /// crashing at launch.
     pub fn load() -> Result<Self> {
         let path = Self::config_path()?;
@@ -235,7 +235,7 @@ impl ConfigStore {
     }
 
     fn config_path() -> Result<PathBuf> {
-        let dirs = ProjectDirs::from("dev", "meatshell", "meatshell")
+        let dirs = ProjectDirs::from("dev", "openshell", "openshell")
             .context("could not determine user config directory")?;
         Ok(dirs.config_dir().join("sessions.json"))
     }

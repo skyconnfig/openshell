@@ -3,7 +3,7 @@
 // relying on Consolas / Segoe MDL2 Assets being installed.
 //
 // Cascadia Mono: full box-drawing + block-elements + braille (needed by btop
-//   for its sparkline graphs; JetBrains Mono lacks braille → garbled output).
+//   for its sparkline graphs; JetBrains Mono lacks braille �?garbled output).
 // Material Icons: open-source icon font replacing Windows-only Segoe MDL2 Assets.
 import "fonts/CascadiaMono-Regular.ttf";
 import "fonts/CascadiaMono-Bold.ttf";
@@ -28,7 +28,7 @@ export { SessionInfo, SessionDraft, TabInfo, SftpEntry, SftpTreeNode }
 export struct TransferInfo {
     id: string,
     name: string,
-    detail: string,   // "2.3 MB/5.0 MB" | "已完成" | "失败"
+    detail: string,   // "2.3 MB/5.0 MB" | "已完�? | "失败"
     percent: float,   // 0.0..1.0
     state: int,       // 0 active / 1 done / 2 error
     is-upload: bool,
@@ -60,7 +60,7 @@ export struct TerminalState {
 }
 
 export component AppWindow inherits Window {
-    title: "meatshell";
+    title: "openshell";
     icon: @image-url("../assets/icon.png");
     min-width: 960px;
     min-height: 600px;
@@ -79,8 +79,8 @@ export component AppWindow inherits Window {
     in property <string> swap-detail;
     // Dual network panel.  "top" follows the active tab (remote NIC on a
     // session tab, local on the welcome tab); "bot" is always the local machine.
-    in property <string> net-top-up;        // ↑ tx rate text
-    in property <string> net-top-down;      // ↓ rx rate text
+    in property <string> net-top-up;        // �?tx rate text
+    in property <string> net-top-down;      // �?rx rate text
     in property <[float]> net-top-history;
     in property <string> net-bot-up;
     in property <string> net-bot-down;
@@ -238,7 +238,7 @@ export component AppWindow inherits Window {
                     remove-session(id) => { root.remove-session(id); }
                 }
 
-                // Terminal tabs — one TerminalView per terminal state. Only
+                // Terminal tabs �?one TerminalView per terminal state. Only
                 // the one matching `active-tab-id` is visible. Slint doesn't
                 // allow nesting `if` directly inside a `for`, so we toggle
                 // visibility instead and rely on the layout to overlap them.
@@ -299,7 +299,7 @@ export component AppWindow inherits Window {
     }
 
     // --- Top-right buttons: [下载] [设置] (设置 on the far right) ----------
-    // Settings (gear) — far right.
+    // Settings (gear) �?far right.
     Rectangle {
         x: root.width - 34px;
         y: 8px;
@@ -323,7 +323,7 @@ export component AppWindow inherits Window {
             vertical-alignment: center;
         }
     }
-    // Download manager — left of settings.
+    // Download manager �?left of settings.
     Rectangle {
         x: root.width - 64px;
         y: 8px;
@@ -495,7 +495,7 @@ export component AppWindow inherits Window {
                                 HorizontalLayout {
                                     spacing: 4px;
                                     Text {
-                                        text: (t.is-upload ? "↑ " : "↓ ") + t.name;
+                                        text: (t.is-upload ? "�?" : "�?") + t.name;
                                         color: Theme.text-primary;
                                         font-size: Theme.fs-xs;
                                         horizontal-stretch: 1;
@@ -568,7 +568,7 @@ export component AppWindow inherits Window {
                     Text { text: "\u{E894}"; font-family: "Material Icons"; // language/translate
                            color: Theme.text-secondary; font-size: Theme.fs-sm;
                            vertical-alignment: center; }
-                    Text { text: root.lang-en ? "切换到中文" : "Switch to English";
+                    Text { text: root.lang-en ? "切换到中�? : "Switch to English";
                            color: Theme.text-primary; font-size: Theme.fs-md;
                            vertical-alignment: center; horizontal-stretch: 1; }
                 }
@@ -625,7 +625,7 @@ export component AppWindow inherits Window {
 
                 HorizontalLayout {
                     Text {
-                        text: @tr("About meatshell");
+                        text: @tr("About openshell");
                         color: Theme.text-primary;
                         font-size: Theme.fs-lg;
                         font-weight: 700;

@@ -68,7 +68,7 @@ component StatRow inherits HorizontalLayout {
 }
 
 // --- NetGraph --------------------------------------------------------------
-// One network throughput graph: a header row (â†‘ tx / â†“ rx, plus an optional
+// One network throughput graph: a header row (â†?tx / â†?rx, plus an optional
 // NIC selector dropdown) over an auto-scaled sparkline.
 component NetGraph inherits VerticalLayout {
     in property <string> up-text;
@@ -86,7 +86,7 @@ component NetGraph inherits VerticalLayout {
 
     HorizontalLayout {
         spacing: 3px;
-        Text {                              // â†‘ upload (green)
+        Text {                              // â†?upload (green)
             text: "\u{E5D8}";
             font-family: "Material Icons";
             color: Theme.success;
@@ -99,7 +99,7 @@ component NetGraph inherits VerticalLayout {
             font-size: Theme.fs-xs;
             vertical-alignment: center;
         }
-        Text {                              // â†“ download (blue)
+        Text {                              // â†?download (blue)
             text: "\u{E5DB}";
             font-family: "Material Icons";
             color: Theme.accent;
@@ -248,7 +248,7 @@ export component Sidebar inherits Rectangle {
 
         Rectangle { height: 1px; background: Theme.border-subtle; }
 
-        // System stats â€” local machine on the welcome tab, the remote server
+        // System stats â€?local machine on the welcome tab, the remote server
         // when a connected session tab is active.
         Text {
             text: root.resource-title;
@@ -280,7 +280,7 @@ export component Sidebar inherits Rectangle {
 
         Rectangle { height: 1px; background: Theme.border-subtle; }
 
-        // Network â€” dual graph: top follows the active tab (remote NIC with a
+        // Network â€?dual graph: top follows the active tab (remote NIC with a
         // selector on a session tab; local on the welcome tab), bottom is the
         // local machine.
         VerticalLayout {
@@ -380,7 +380,7 @@ export component Sidebar inherits Rectangle {
         }
 
         Text {
-            text: "meatshell v0.2.2";
+            text: "openshell v0.2.2";
             color: Theme.text-muted;
             font-size: Theme.fs-xs;
             horizontal-alignment: center;

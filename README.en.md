@@ -1,4 +1,4 @@
-# meatshell
+# openshell
 
 [简体中文](./README.md) | **English**
 
@@ -28,11 +28,11 @@ the tens-of-MB range of a native binary.
 - [x] Local system monitor sidebar (CPU / memory / swap / network throughput, 1 Hz)
 - [x] Tabs (welcome page + multiple terminal sessions)
 - [x] Session management: create / edit / delete, persisted to local JSON
-  - Config location: `%APPDATA%/meatshell/sessions.json` (Windows)
-    / `~/.config/meatshell/sessions.json` (Linux)
-    / `~/Library/Application Support/meatshell/sessions.json` (macOS)
+  - Config location: `%APPDATA%/openshell/sessions.json` (Windows)
+    / `~/.config/openshell/sessions.json` (Linux)
+    / `~/Library/Application Support/openshell/sessions.json` (macOS)
 - [x] SSH connection scaffold (`russh`, pure Rust, password + private key)
-- [x] Line-buffered terminal view (type a line → Enter to send)
+- [x] Line-buffered terminal view (type a line �?Enter to send)
 
 ### v0.2
 
@@ -67,27 +67,27 @@ cargo run --release
 ```
 
 On first launch an empty session store is created at
-`%APPDATA%/meatshell/sessions.json`. Click **"＋ New Session"** in the top-right
+`%APPDATA%/openshell/sessions.json`. Click **"�?New Session"** in the top-right
 to add your first server.
 
 ## Project layout
 
 ```
-meatshell/
+openshell/
 ├── Cargo.toml
 ├── build.rs                 # Slint compiler entry point
 ├── ui/
-│   ├── app.slint            # top-level window
-│   ├── theme.slint          # design tokens
-│   ├── widgets.slint        # reusable buttons / inputs / sparkline
-│   ├── sidebar.slint        # left-hand system monitor panel
-│   ├── tabs.slint           # top tab bar
-│   ├── welcome.slint        # welcome page / quick connect
-│   ├── session_dialog.slint # new / edit session dialog
-│   └── terminal_view.slint  # terminal view (v0.1 line-buffered)
+�?  ├── app.slint            # top-level window
+�?  ├── theme.slint          # design tokens
+�?  ├── widgets.slint        # reusable buttons / inputs / sparkline
+�?  ├── sidebar.slint        # left-hand system monitor panel
+�?  ├── tabs.slint           # top tab bar
+�?  ├── welcome.slint        # welcome page / quick connect
+�?  ├── session_dialog.slint # new / edit session dialog
+�?  └── terminal_view.slint  # terminal view (v0.1 line-buffered)
 └── src/
     ├── main.rs
-    ├── app.rs               # UI ↔ backend bridge
+    ├── app.rs               # UI �?backend bridge
     ├── config.rs            # session JSON persistence
     ├── system.rs            # CPU / memory / network sampling
     └── ssh.rs               # SSH session worker

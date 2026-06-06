@@ -1,11 +1,11 @@
 [package]
-name = "meatshell"
+name = "openshell"
 version = "0.2.2"
 edition = "2021"
-authors = ["meatshell contributors"]
+authors = ["openshell contributors"]
 description = "A lightweight FinalShell-style SSH/terminal client written in Rust + Slint"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/your/meatshell"
+repository = "https://github.com/your/openshell"
 readme = "README.md"
 rust-version = "1.75"
 
@@ -51,7 +51,7 @@ slint-build = "1.8"
 cc = "1"
 pkg-config = "0.3"
 
-# Embeds assets/meatshell.ico into the .exe so Explorer / taskbar / shortcuts
+# Embeds assets/openshell.ico into the .exe so Explorer / taskbar / shortcuts
 # show the app icon. Windows-only; ignored on other targets.
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
